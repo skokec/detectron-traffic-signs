@@ -37,6 +37,18 @@ RAW_DIR = 'raw_dir'
 
 # Available datasets
 DATASETS = {
+    'villard_train': {
+        IM_DIR:
+            '/opt/workspace/volume_data/DFG-database/dataset_extended_5/DFG_FasterRCNNformat_coordBased/JPEGImages',
+        ANN_FN:
+            '/opt/workspace/volume_data/DFG-database/dataset_extended_5/DFG_FasterRCNNformat_coordBased/ImageSets/Main/e5_coordBased/models/maskrcnn/villard_train.json',
+    },
+    'villard_test': {
+        IM_DIR:
+            '/opt/workspace/volume_data/DFG-database/dataset_extended_5/DFG_FasterRCNNformat_coordBased/JPEGImages',
+        ANN_FN:
+            '/opt/workspace/volume_data/DFG-database/dataset_extended_5/DFG_FasterRCNNformat_coordBased/ImageSets/Main/e5_coordBased/models/maskrcnn/villard_test.json',
+    },
     'cityscapes_fine_instanceonly_seg_train': {
         IM_DIR:
             _DATA_DIR + '/cityscapes/images',

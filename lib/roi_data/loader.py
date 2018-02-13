@@ -139,16 +139,22 @@ class RoIDataLoader(object):
         if cfg.TRAIN.ASPECT_GROUPING:
             widths = np.array([r['width'] for r in self._roidb])
             heights = np.array([r['height'] for r in self._roidb])
+            print(widths,heights)
             horz = (widths >= heights)
             vert = np.logical_not(horz)
+            print(horz,vert)
             horz_inds = np.where(horz)[0]
             vert_inds = np.where(vert)[0]
+            print(horz_inds,vert_inds)
             inds = np.hstack(
                 (
                     np.random.permutation(horz_inds),
                     np.random.permutation(vert_inds)
                 )
             )
+            np.set_printoptions(threshold=np.inf)
+            print(inds)
+            print(inds.size)
             inds = np.reshape(inds, (-1, 2))
             row_perm = np.random.permutation(np.arange(inds.shape[0]))
             inds = np.reshape(inds[row_perm, :], (-1, ))

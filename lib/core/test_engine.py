@@ -182,6 +182,7 @@ def test_net(ind_range=None):
 
         if cfg.VIS:
             im_name = os.path.splitext(os.path.basename(entry['image']))[0]
+            print(cls_segms_i)
             vis_utils.vis_one_image(
                 im[:, :, ::-1],
                 '{:d}_{:s}'.format(i, im_name),
@@ -190,9 +191,10 @@ def test_net(ind_range=None):
                 segms=cls_segms_i,
                 keypoints=cls_keyps_i,
                 thresh=cfg.VIS_TH,
-                box_alpha=0.8,
+                box_alpha=1,
                 dataset=dataset,
-                show_class=True
+                show_class=True,
+                ext='jpg'
             )
 
     cfg_yaml = yaml.dump(cfg)

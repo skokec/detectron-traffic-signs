@@ -260,6 +260,9 @@ def vis_one_image(
         boxes, segms, keypoints, classes = convert_from_cls_format(
             boxes, segms, keypoints)
 
+    thresh = 0.8
+    box_alpha = 1
+
     if boxes is None or boxes.shape[0] == 0 or max(boxes[:, 4]) < thresh:
         return
 
@@ -297,17 +300,17 @@ def vis_one_image(
             plt.Rectangle((bbox[0], bbox[1]),
                           bbox[2] - bbox[0],
                           bbox[3] - bbox[1],
-                          fill=False, edgecolor='g',
-                          linewidth=0.5, alpha=box_alpha))
+                          fill=False, edgecolor='r',
+                          linewidth=2, alpha=box_alpha))
 
         if show_class:
             ax.text(
                 bbox[0], bbox[1] - 2,
                 get_class_string(classes[i], score, dataset),
-                fontsize=3,
+                fontsize=10,
                 family='serif',
                 bbox=dict(
-                    facecolor='g', alpha=0.4, pad=0, edgecolor='none'),
+                    facecolor='r', alpha=1, pad=0, edgecolor='none'),
                 color='white')
 
         # show mask

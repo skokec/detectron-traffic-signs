@@ -51,7 +51,7 @@ def initialize_gpu_0_from_weights_file(model, weights_file):
     """Initialize a network with ops on GPU 0. Note that we always use GPU 0 and
     rely on proper usage of CUDA_VISIBLE_DEVICES.
     """
-    logger.info('Loading from: {}'.format(weights_file))
+    #logger.info('Loading from: {}'.format(weights_file))
     ws_blobs = workspace.Blobs()
     with open(weights_file, 'r') as f:
         src_blobs = pickle.load(f)
@@ -85,10 +85,10 @@ def initialize_gpu_0_from_weights_file(model, weights_file):
             dst_name = core.ScopedName(unscoped_param_name)
             has_momentum = src_name + '_momentum' in src_blobs
             has_momentum_str = ' [+ momentum]' if has_momentum else ''
-            logger.info('{:s}{:} loaded from weights file into {:s}: {}'.
-                        format(
-                            src_name, has_momentum_str,
-                            dst_name, src_blobs[src_name].shape))
+            # logger.info('{:s}{:} loaded from weights file into {:s}: {}'.
+            #             format(
+            #                 src_name, has_momentum_str,
+            #                 dst_name, src_blobs[src_name].shape))
             if dst_name in ws_blobs:
                 # If the blob is already in the workspace, make sure that it
                 # matches the shape of the loaded blob
@@ -121,8 +121,8 @@ def initialize_gpu_0_from_weights_file(model, weights_file):
             with c2_utils.CpuScope():
                 workspace.FeedBlob(
                     '__preserve__/{:s}'.format(src_name), src_blobs[src_name])
-                logger.info(
-                    '{:s} preserved in workspace (unused)'.format(src_name))
+                #logger.info(
+                    #'{:s} preserved in workspace (unused)'.format(src_name))
 
 
 def save_model_to_weights_file(weights_file, model):
