@@ -26,8 +26,9 @@ import os
 # Path to data dir
 _DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 
-_VILLARD_DB_DIR = '/opt/workspace/volume_data/'
-_DFG_DB_DIR = os.path.join(_VILLARD_DB_DIR,'DFG-database/')
+_VILLARD_DB_DIR = '/opt/workspace/volume_data'
+_DFG_DB_DIR = os.path.join(_VILLARD_DB_DIR,'DFG-database')
+_SWEDISH_DB_DIR = os.path.join(_VILLARD_DB_DIR,'SwedishTSdataset')
 
 # Required dataset entry keys
 IM_DIR = 'image_directory'
@@ -38,7 +39,7 @@ IM_PREFIX = 'image_prefix'
 DEVKIT_DIR = 'devkit_directory'
 RAW_DIR = 'raw_dir'
 
-def get_dfg_database(root, db_parent_dir, db_name, db_case_name, split_name):
+def get_villard_database(root, db_parent_dir, db_name, db_case_name, split_name):
     return {
         IM_DIR:
             os.path.join(root, db_parent_dir, db_name, 'JPEGImages'),
@@ -48,8 +49,17 @@ def get_dfg_database(root, db_parent_dir, db_name, db_case_name, split_name):
 
 # Available datasets
 DATASETS = {
-    'dfg_e5_coordBased_train': get_dfg_database(_DFG_DB_DIR, 'dataset_extended_5', 'DFG_FasterRCNNformat_coordBased', 'e5_coordBased', 'train'),
-    'dfg_e5_coordBased_test': get_dfg_database(_DFG_DB_DIR, 'dataset_extended_5', 'DFG_FasterRCNNformat_coordBased', 'e5_coordBased', 'test'),
+    'dfg_e5_coordBased_train': get_villard_database(_DFG_DB_DIR, 'dataset_extended_5', 'DFG_FasterRCNNformat_coordBased', 'e5_coordBased', 'train'),
+    'dfg_e5_coordBased_test': get_villard_database(_DFG_DB_DIR, 'dataset_extended_5', 'DFG_FasterRCNNformat_coordBased', 'e5_coordBased', 'test'),
+
+    'swedish_set1train_set2test_train': get_villard_database(_SWEDISH_DB_DIR, 'swedish_FasterRCNNformat', 'set1train_set2test', 'train'),
+    'swedish_set1train_set2test_test': get_villard_database(_SWEDISH_DB_DIR, 'swedish_FasterRCNNformat', 'set1train_set2test', 'test'),
+
+    'swedish_set1train_pos_set2test_train': get_villard_database(_SWEDISH_DB_DIR, 'swedish_FasterRCNNformat', 'set1train_pos_set2test', 'train'),
+    'swedish_set1train_pos_set2test_test': get_villard_database(_SWEDISH_DB_DIR, 'swedish_FasterRCNNformat', 'set1train_pos_set2test', 'test'),
+
+    'swedish_set1train_pos_set2test_pos_train': get_villard_database(_SWEDISH_DB_DIR, 'swedish_FasterRCNNformat', 'set1train_pos_set2test_pos', 'train'),
+    'swedish_set1train_pos_set2test_pos_test': get_villard_database(_SWEDISH_DB_DIR, 'swedish_FasterRCNNformat', 'set1train_pos_set2test_pos', 'test'),
 
     'cityscapes_fine_instanceonly_seg_train': {
         IM_DIR:
