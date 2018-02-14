@@ -26,6 +26,9 @@ import os
 # Path to data dir
 _DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 
+_VILLARD_DB_DIR = '/opt/workspace/volume_data/'
+_DFG_DB_DIR = os.path.join(_VILLARD_DB_DIR,'DFG-database/')
+
 # Required dataset entry keys
 IM_DIR = 'image_directory'
 ANN_FN = 'annotation_file'
@@ -35,20 +38,19 @@ IM_PREFIX = 'image_prefix'
 DEVKIT_DIR = 'devkit_directory'
 RAW_DIR = 'raw_dir'
 
+def get_dfg_database(root, db_parent_dir, db_name, db_case_name, split_name):
+    return {
+        IM_DIR:
+            os.path.join(root, db_parent_dir, db_name, 'JPEGImages'),
+        ANN_FN:
+            os.path.join(root, db_parent_dir, db_name, 'ImageSets','Main', db_case_name,'maskrcnn', split_name + '.json'),
+    }
+
 # Available datasets
 DATASETS = {
-    'villard_train': {
-        IM_DIR:
-            '/opt/workspace/volume_data/DFG-database/dataset_extended_5/DFG_FasterRCNNformat_coordBased/JPEGImages',
-        ANN_FN:
-            '/opt/workspace/volume_data/DFG-database/dataset_extended_5/DFG_FasterRCNNformat_coordBased/ImageSets/Main/e5_coordBased/models/maskrcnn/villard_train.json',
-    },
-    'villard_test': {
-        IM_DIR:
-            '/opt/workspace/volume_data/DFG-database/dataset_extended_5/DFG_FasterRCNNformat_coordBased/JPEGImages',
-        ANN_FN:
-            '/opt/workspace/volume_data/DFG-database/dataset_extended_5/DFG_FasterRCNNformat_coordBased/ImageSets/Main/e5_coordBased/models/maskrcnn/villard_test.json',
-    },
+    'dfg_e5_coordBased_train': get_dfg_database(_DFG_DB_DIR, 'dataset_extended_5', 'DFG_FasterRCNNformat_coordBased', 'e5_coordBased', 'train'),
+    'dfg_e5_coordBased_test': get_dfg_database(_DFG_DB_DIR, 'dataset_extended_5', 'DFG_FasterRCNNformat_coordBased', 'e5_coordBased', 'test'),
+
     'cityscapes_fine_instanceonly_seg_train': {
         IM_DIR:
             _DATA_DIR + '/cityscapes/images',
