@@ -52,14 +52,14 @@ DATASETS = {
     'dfg_e5_coordBased_train': get_villard_database(_DFG_DB_DIR, 'dataset_extended_5', 'DFG_FasterRCNNformat_coordBased', 'e5_coordBased', 'train'),
     'dfg_e5_coordBased_test': get_villard_database(_DFG_DB_DIR, 'dataset_extended_5', 'DFG_FasterRCNNformat_coordBased', 'e5_coordBased', 'test'),
 
-    'swedish_set1train_set2test_train': get_villard_database(_SWEDISH_DB_DIR, 'swedish_FasterRCNNformat', 'set1train_set2test', 'train'),
-    'swedish_set1train_set2test_test': get_villard_database(_SWEDISH_DB_DIR, 'swedish_FasterRCNNformat', 'set1train_set2test', 'test'),
+    'swedish_set1train_set2test_train': get_villard_database(_SWEDISH_DB_DIR, '', 'swedish_FasterRCNNformat', 'set1train_set2test', 'train'),
+    'swedish_set1train_set2test_test': get_villard_database(_SWEDISH_DB_DIR, '','swedish_FasterRCNNformat', 'set1train_set2test', 'test'),
 
-    'swedish_set1train_pos_set2test_train': get_villard_database(_SWEDISH_DB_DIR, 'swedish_FasterRCNNformat', 'set1train_pos_set2test', 'train'),
-    'swedish_set1train_pos_set2test_test': get_villard_database(_SWEDISH_DB_DIR, 'swedish_FasterRCNNformat', 'set1train_pos_set2test', 'test'),
+    'swedish_set1train_pos_set2test_train': get_villard_database(_SWEDISH_DB_DIR, '','swedish_FasterRCNNformat', 'set1train_pos_set2test', 'train'),
+    'swedish_set1train_pos_set2test_test': get_villard_database(_SWEDISH_DB_DIR, '','swedish_FasterRCNNformat', 'set1train_pos_set2test', 'test'),
 
-    'swedish_set1train_pos_set2test_pos_train': get_villard_database(_SWEDISH_DB_DIR, 'swedish_FasterRCNNformat', 'set1train_pos_set2test_pos', 'train'),
-    'swedish_set1train_pos_set2test_pos_test': get_villard_database(_SWEDISH_DB_DIR, 'swedish_FasterRCNNformat', 'set1train_pos_set2test_pos', 'test'),
+    'swedish_set1train_pos_set2test_pos_train': get_villard_database(_SWEDISH_DB_DIR, '','swedish_FasterRCNNformat', 'set1train_pos_set2test_pos', 'train'),
+    'swedish_set1train_pos_set2test_pos_test': get_villard_database(_SWEDISH_DB_DIR, '','swedish_FasterRCNNformat', 'set1train_pos_set2test_pos', 'test'),
 
     'cityscapes_fine_instanceonly_seg_train': {
         IM_DIR:
