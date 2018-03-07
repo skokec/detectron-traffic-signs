@@ -770,6 +770,8 @@ def box_results_with_nms_and_limit(scores, boxes):
         dets_j = np.hstack((boxes_j, scores_j[:, np.newaxis])).astype(
             np.float32, copy=False
         )
+        if len(inds) > 0:
+            pass
         if cfg.TEST.SOFT_NMS.ENABLED:
             nms_dets, _ = box_utils.soft_nms(
                 dets_j,
@@ -781,6 +783,7 @@ def box_results_with_nms_and_limit(scores, boxes):
         else:
             keep = box_utils.nms(dets_j, cfg.TEST.NMS)
             nms_dets = dets_j[keep, :]
+
         # Refine the post-NMS boxes using bounding-box voting
         if cfg.TEST.BBOX_VOTE.ENABLED:
             nms_dets = box_utils.box_voting(

@@ -28,8 +28,10 @@ import utils.blob as blob_utils
 
 
 class CollectAndDistributeFpnRpnProposalsOp(object):
-    def __init__(self, train):
+    def __init__(self, train, ohem=False):
         self._train = train
+        self._ohem = ohem
+        self._tmp = dict(i=0, val=[])
 
     def forward(self, inputs, outputs):
         """See modeling.detector.CollectAndDistributeFpnRpnProposals for
@@ -52,12 +54,12 @@ class CollectAndDistributeFpnRpnProposalsOp(object):
             # implementation we are *not* filtering crowd proposals.
             # This choice should be investigated in the future (it likely does
             # not matter).
-            json_dataset.add_proposals(roidb, rois, im_scales, crowd_thresh=0)
+            json_dataset.add_proposals(roidb, rois, im_scales, crowd_thresh=0, tmp=self._tmp)
             # Compute training labels for the RPN proposals; also handles
             # distributing the proposals over FPN levels
-            output_blob_names = roi_data.fast_rcnn.get_fast_rcnn_blob_names()
+            output_blob_names = roi_data.fast_rcnn.get_fast_rcnn_blob_names(ohem=self._ohem)
             blobs = {k: [] for k in output_blob_names}
-            roi_data.fast_rcnn.add_fast_rcnn_blobs(blobs, im_scales, roidb)
+            roi_data.fast_rcnn.add_fast_rcnn_blobs(blobs, im_scales, roidb, ohem=self._ohem)
             for i, k in enumerate(output_blob_names):
                 blob_utils.py_op_copy_blob(blobs[k], outputs[i])
         else:

@@ -37,7 +37,7 @@ import utils.boxes as box_utils
 logger = logging.getLogger(__name__)
 
 
-def get_fast_rcnn_blob_names(is_training=True):
+def get_fast_rcnn_blob_names(is_training=True, ohem = False):
     """Fast R-CNN blob names."""
     # rois blob: holds R regions of interest, each is a 5-tuple
     # (batch_idx, x1, y1, x2, y2) specifying an image batch index and a
@@ -47,6 +47,7 @@ def get_fast_rcnn_blob_names(is_training=True):
         # labels_int32 blob: R categorical labels in [0, ..., K] for K
         # foreground classes plus background
         blob_names += ['labels_int32']
+        blob_names += ['label_loss_weights']
     if is_training:
         # bbox_targets blob: R bounding-box regression targets with 4
         # targets per class
@@ -102,14 +103,23 @@ def get_fast_rcnn_blob_names(is_training=True):
                 for lvl in range(k_min, k_max + 1):
                     blob_names += ['keypoint_rois_fpn' + str(lvl)]
                 blob_names += ['keypoint_rois_idx_restore_int32']
+
+    # add ohem prefix to output blobs if in ohem
+    if ohem:
+        blob_names = ['ohem_' + b for b in blob_names]
+
     return blob_names
 
 
-def add_fast_rcnn_blobs(blobs, im_scales, roidb):
+def add_fast_rcnn_blobs(blobs, im_scales, roidb, ohem=False):
     """Add blobs needed for training Fast R-CNN style models."""
     # Sample training RoIs from each image and append them to the blob lists
     for im_i, entry in enumerate(roidb):
-        frcn_blobs = _sample_rois(entry, im_scales[im_i], im_i)
+        if ohem:
+            # in ohem we do not sample but use all of them for classification
+            frcn_blobs = _all_rois(entry, im_scales[im_i], im_i)
+        else:
+            frcn_blobs = _sample_rois(entry, im_scales[im_i], im_i)
         for k, v in frcn_blobs.items():
             blobs[k].append(v)
     # Concat the training blob lists into tensors
@@ -118,7 +128,7 @@ def add_fast_rcnn_blobs(blobs, im_scales, roidb):
             blobs[k] = np.concatenate(v)
     # Add FPN multilevel training RoIs, if configured
     if cfg.FPN.FPN_ON and cfg.FPN.MULTILEVEL_ROIS:
-        _add_multilevel_rois(blobs)
+        _add_multilevel_rois(blobs, ohem)
 
     # Perform any final work and validity checks after the collating blobs for
     # all minibatch images
@@ -127,6 +137,81 @@ def add_fast_rcnn_blobs(blobs, im_scales, roidb):
         valid = roi_data.keypoint_rcnn.finalize_keypoint_minibatch(blobs, valid)
 
     return valid
+
+def filter_fast_rcnn_blobs(blobs, output_blob_names, cls_scores):
+    """Filters out ROI for OHEM. Only hard negative samples are retained. """
+    rois_per_image = int(cfg.TRAIN.BATCH_SIZE_PER_IM)
+    fg_fraction = cfg.TRAIN.FG_FRACTION
+
+    output_blobs = {k: [] for i, k in enumerate(output_blob_names)}
+
+    # for each image retain only relevant regions proposals
+    keep_ind_unsorted = []
+
+    for i in np.unique(blobs['rois'][:, 0]):
+
+        ith_sample = np.where(blobs['rois'][:, 0] == i)[0]
+
+        # print('%d rois for sample %d ' % (len(ith_sample),i ))
+
+        # print('label shape:', blobs['labels_int32'].shape)
+        # print('mask values: ', ith_sample)
+
+        bboxes = blobs['rois'][ith_sample, :]
+        labels = blobs['labels_int32'][ith_sample]
+        losses = cls_scores[ith_sample, :]
+
+        # get softmax and find appropriate loss based on GT label
+        score_softmax = np.divide(np.exp(losses).T, np.sum(np.exp(losses), 1)).T
+        losses = score_softmax[range(labels.shape[0]), labels]
+        losses = -np.log(losses)
+
+        # sort by descending losses
+        sort_ids = np.argsort(losses)[::-1]
+
+        bboxes = bboxes[sort_ids]
+        labels = labels[sort_ids]
+        losses = losses[sort_ids]
+
+        bg_ids = np.where(labels == 0)[0]
+        fg_ids = np.where(labels > 0)[0]
+
+        keep_inds = np.zeros(len(sort_ids), dtype=bool)
+
+        # do NMS on bg regions but not on fg
+        fg_keep_inds = range(len(fg_ids))
+        bg_keep_inds = box_utils.nms(np.hstack((bboxes[bg_ids, 1:], losses[bg_ids].reshape((-1, 1)))), 0.3)
+
+        # calculate how many fg can we retain
+        max_fg_inds = min(len(fg_keep_inds), int(rois_per_image * fg_fraction))
+
+        if max_fg_inds > 0:
+            keep_inds[fg_ids[fg_keep_inds[0:max_fg_inds]]] = True
+
+        # print('keep num pos inds:', len(np.where(keep_inds)[0]))
+
+        # set which bg regions to retain
+        remaining_inds = max(rois_per_image - np.count_nonzero(keep_inds), 0)
+        if remaining_inds > 0:
+            keep_inds[bg_ids[bg_keep_inds[0:remaining_inds]]] = True
+
+        # print('keep num pos and neg inds:', len(np.where(keep_inds)[0]))
+
+        # we got indexes on sorted array but need them on unsorted so !!
+        keep_ind_unsorted.append(sort_ids[np.where(keep_inds)[0]])
+
+    # merge indexes to keep
+    keep_ind_unsorted = np.concatenate(keep_ind_unsorted)
+
+    # retain only hard examples for fast-rcnn boxes
+    for k in ['rois', 'labels_int32', 'label_loss_weights', 'bbox_targets', 'bbox_inside_weights', 'bbox_outside_weights']:
+        output_blobs[k] = blobs[k][keep_ind_unsorted]
+
+    # Add FPN multilevel training RoIs, if configured
+    if cfg.FPN.FPN_ON and cfg.FPN.MULTILEVEL_ROIS:
+        _add_multilevel_rois(output_blobs, False)
+
+    return output_blobs
 
 
 def _sample_rois(roidb, im_scale, batch_idx):
@@ -170,10 +255,11 @@ def _sample_rois(roidb, im_scale, batch_idx):
     sampled_labels[fg_rois_per_this_image:] = 0  # Label bg RoIs with class 0
     sampled_boxes = roidb['boxes'][keep_inds]
 
+    gt_inds = np.where(roidb['gt_classes'] > 0)[0]
+    gt_boxes = roidb['boxes'][gt_inds, :]
+    gt_assignments = gt_inds[roidb['box_to_gt_ind_map'][keep_inds]]
+
     if 'bbox_targets' not in roidb:
-        gt_inds = np.where(roidb['gt_classes'] > 0)[0]
-        gt_boxes = roidb['boxes'][gt_inds, :]
-        gt_assignments = gt_inds[roidb['box_to_gt_ind_map'][keep_inds]]
         bbox_targets = _compute_targets(
             sampled_boxes, gt_boxes[gt_assignments, :], sampled_labels
         )
@@ -182,6 +268,21 @@ def _sample_rois(roidb, im_scale, batch_idx):
         bbox_targets, bbox_inside_weights = _expand_bbox_targets(
             roidb['bbox_targets'][keep_inds, :]
         )
+
+    label_weights = np.ones(sampled_labels.shape) * 0.1 # eight version
+
+    fg_inds = np.where(sampled_labels > 0)[0]
+
+    bbox_target_area = gt_boxes[gt_assignments[fg_inds], 2] * gt_boxes[gt_assignments[fg_inds], 3]
+
+    #label_weights[fg_inds] = 9**(1/np.sqrt(bbox_target_area)*100)*10 # initial version
+    #label_weights[fg_inds] = 2**(1/np.sqrt(bbox_target_area)*256)  # second version
+    #label_weights[fg_inds] = 2 ** (1 / np.sqrt(bbox_target_area) * 256) *10  # third version
+    #label_weights[fg_inds] = 2 ** (1 / np.sqrt(bbox_target_area) * 384) # forth version
+    #label_weights[fg_inds] = 2 ** (1 / np.sqrt(bbox_target_area) * 384) * 10 # fifth version
+    #label_weights[fg_inds] = 10 ** (1 / np.sqrt(bbox_target_area) * 100) # sixt version
+    #label_weights[fg_inds] = 10 ** (1 / np.sqrt(bbox_target_area) * 128)  # seventh version
+    label_weights[fg_inds] = 1 # eight version
 
     bbox_outside_weights = np.array(
         bbox_inside_weights > 0, dtype=bbox_inside_weights.dtype
@@ -195,6 +296,7 @@ def _sample_rois(roidb, im_scale, batch_idx):
     # Base Fast R-CNN blobs
     blob_dict = dict(
         labels_int32=sampled_labels.astype(np.int32, copy=False),
+        label_loss_weights=label_weights,
         rois=sampled_rois,
         bbox_targets=bbox_targets,
         bbox_inside_weights=bbox_inside_weights,
@@ -212,6 +314,82 @@ def _sample_rois(roidb, im_scale, batch_idx):
         roi_data.keypoint_rcnn.add_keypoint_rcnn_blobs(
             blob_dict, roidb, fg_rois_per_image, fg_inds, im_scale, batch_idx
         )
+
+    return blob_dict
+
+
+def _all_rois(roidb, im_scale, batch_idx):
+    """Pass all RoIs with labels.
+    """
+    max_overlaps = roidb['max_overlaps']
+
+    # Select background RoIs as those within [BG_THRESH_LO, BG_THRESH_HI)
+    bg_inds = np.where(
+        (max_overlaps < cfg.TRAIN.BG_THRESH_HI) &
+        (max_overlaps >= cfg.TRAIN.BG_THRESH_LO)
+    )[0]
+
+    # Label is the class each RoI has max overlap with
+    sampled_labels = roidb['max_classes']
+    sampled_labels[bg_inds] = 0  # Label bg RoIs with class 0
+    sampled_boxes = roidb['boxes']
+
+    gt_inds = np.where(roidb['gt_classes'] > 0)[0]
+    gt_boxes = roidb['boxes'][gt_inds, :]
+    gt_assignments = gt_inds[roidb['box_to_gt_ind_map']]
+
+    if 'bbox_targets' not in roidb:
+        bbox_targets = _compute_targets(
+            sampled_boxes, gt_boxes[gt_assignments, :], sampled_labels
+        )
+        bbox_targets, bbox_inside_weights = _expand_bbox_targets(bbox_targets)
+    else:
+        bbox_targets, bbox_inside_weights = _expand_bbox_targets(
+            roidb['bbox_targets']
+        )
+    label_weights = np.ones(sampled_labels.shape) * 0.1 # eight version
+
+    fg_inds = np.where(sampled_labels > 0)[0]
+
+    bbox_target_area = gt_boxes[gt_assignments[fg_inds], 2] * gt_boxes[gt_assignments[fg_inds], 3]
+
+    #label_weights[fg_inds] = 9**(1/np.sqrt(bbox_target_area)*100)*10 # initial version
+    #label_weights[fg_inds] = 2 ** (1 / np.sqrt(bbox_target_area) * 256) # second version
+    #label_weights[fg_inds] = 2 ** (1 / np.sqrt(bbox_target_area) * 256) * 10 # third version
+    #label_weights[fg_inds] = 2 ** (1 / np.sqrt(bbox_target_area) * 384)  # forth version
+    #label_weights[fg_inds] = 2 ** (1 / np.sqrt(bbox_target_area) * 384) * 10 # fifth version
+    #label_weights[fg_inds] = 10 ** (1 / np.sqrt(bbox_target_area) * 100) # sixt version
+    #label_weights[fg_inds] = 10 ** (1 / np.sqrt(bbox_target_area) * 128)  # seventh version
+    label_weights[fg_inds] = 1 # eight version
+
+    bbox_outside_weights = np.array(
+        bbox_inside_weights > 0, dtype=bbox_inside_weights.dtype
+    )
+
+    # Scale rois and format as (batch_idx, x1, y1, x2, y2)
+    sampled_rois = sampled_boxes * im_scale
+    repeated_batch_idx = batch_idx * blob_utils.ones((sampled_rois.shape[0], 1))
+    sampled_rois = np.hstack((repeated_batch_idx, sampled_rois))
+
+    # Base Fast R-CNN blobs
+    blob_dict = dict(
+        ohem_labels_int32=sampled_labels.astype(np.int32, copy=False),
+        ohem_label_loss_weights=label_weights,
+        ohem_rois=sampled_rois,
+        ohem_bbox_targets=bbox_targets,
+        ohem_bbox_inside_weights=bbox_inside_weights,
+        ohem_bbox_outside_weights=bbox_outside_weights
+    )
+
+    # Optionally add Mask R-CNN blobs
+    if cfg.MODEL.MASK_ON:
+        # not supported yet
+        raise Exception('ohem not supported for mask-rcnn')
+
+    # Optionally add Keypoint R-CNN blobs
+    if cfg.MODEL.KEYPOINTS_ON:
+        # not supported yet
+        raise Exception('ohem not supported for key-points')
 
     return blob_dict
 
@@ -260,7 +438,7 @@ def _expand_bbox_targets(bbox_target_data):
     return bbox_targets, bbox_inside_weights
 
 
-def _add_multilevel_rois(blobs):
+def _add_multilevel_rois(blobs, ohem=False):
     """By default training RoIs are added for a single feature map level only.
     When using FPN, the RoIs must be distributed over different FPN levels
     according the level assignment heuristic (see: modeling.FPN.
@@ -283,7 +461,7 @@ def _add_multilevel_rois(blobs):
             lvl_max
         )
 
-    _distribute_rois_over_fpn_levels('rois')
+    _distribute_rois_over_fpn_levels('rois' if not ohem else 'ohem_rois')
     if cfg.MODEL.MASK_ON:
         _distribute_rois_over_fpn_levels('mask_rois')
     if cfg.MODEL.KEYPOINTS_ON:

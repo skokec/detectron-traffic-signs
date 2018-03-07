@@ -127,6 +127,7 @@ class GenerateProposalsOp(object):
         #     to match the order of anchors and bbox_deltas
         scores = scores.transpose((1, 2, 0)).reshape((-1, 1))
 
+        #print('all scores in generate proposals:', scores.shape)
         # 4. sort all (proposal, score) pairs by score from highest to lowest
         # 5. take top pre_nms_topN (e.g. 6000)
         if pre_nms_topN <= 0 or pre_nms_topN >= len(scores):
@@ -142,7 +143,7 @@ class GenerateProposalsOp(object):
         bbox_deltas = bbox_deltas[order, :]
         all_anchors = all_anchors[order, :]
         scores = scores[order]
-
+        #print('scores after first limit:', scores.shape)
         # Transform anchors into proposals via bbox transformations
         proposals = box_utils.bbox_transform(
             all_anchors, bbox_deltas, (1.0, 1.0, 1.0, 1.0))
@@ -160,11 +161,13 @@ class GenerateProposalsOp(object):
         # 7. take after_nms_topN (e.g. 300)
         # 8. return the top proposals (-> RoIs top)
         if nms_thresh > 0:
+            #print('scores', proposals.shape)
             keep = box_utils.nms(np.hstack((proposals, scores)), nms_thresh)
             if post_nms_topN > 0:
                 keep = keep[:post_nms_topN]
             proposals = proposals[keep, :]
             scores = scores[keep]
+        #print('scores in generate proposals after nms:', scores.shape)
         return proposals, scores
 
 

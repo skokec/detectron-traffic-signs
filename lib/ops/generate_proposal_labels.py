@@ -22,12 +22,18 @@ import logging
 
 from datasets import json_dataset
 from utils import blob as blob_utils
+from core.config import cfg
+
 import roi_data.fast_rcnn
 
 logger = logging.getLogger(__name__)
 
 
 class GenerateProposalLabelsOp(object):
+
+    def __init__(self, ohem=False):
+        self._ohem = ohem
+        self._tmp = dict(i=0,val=[])
 
     def forward(self, inputs, outputs):
         """See modeling.detector.GenerateProposalLabels for inputs/outputs
@@ -40,13 +46,37 @@ class GenerateProposalLabelsOp(object):
         roidb = blob_utils.deserialize(inputs[1].data)
         im_info = inputs[2].data
         im_scales = im_info[:, 2]
-        output_blob_names = roi_data.fast_rcnn.get_fast_rcnn_blob_names()
+        output_blob_names = roi_data.fast_rcnn.get_fast_rcnn_blob_names(ohem=self._ohem)
         # For historical consistency with the original Faster R-CNN
         # implementation we are *not* filtering crowd proposals.
         # This choice should be investigated in the future (it likely does
         # not matter).
-        json_dataset.add_proposals(roidb, rois, im_scales, crowd_thresh=0)
+        json_dataset.add_proposals(roidb, rois, im_scales, crowd_thresh=0, tmp=self._tmp)
         blobs = {k: [] for k in output_blob_names}
-        roi_data.fast_rcnn.add_fast_rcnn_blobs(blobs, im_scales, roidb)
+        roi_data.fast_rcnn.add_fast_rcnn_blobs(blobs, im_scales, roidb, self._ohem)
         for i, k in enumerate(output_blob_names):
             blob_utils.py_op_copy_blob(blobs[k], outputs[i])
+
+class GenerateHardProposalLabelsOp(object):
+
+    def forward(self, inputs, outputs):
+        """See modeling.detector.GenerateHardProposalLabels for inputs/outputs
+        documentation.
+        """
+        # get list of output names
+        output_blob_names = roi_data.fast_rcnn.get_fast_rcnn_blob_names()
+
+        #for i in range(len(inputs)):
+        #    print('inputs  ', i, 'with shape', inputs[i].shape )
+
+        #print('all output blobs:',output_blob_names)
+
+        # associated original input with each output blob
+        blobs = {k: inputs[i+1].data for i,k in enumerate(output_blob_names)}
+
+        cls_scores = inputs[0].data
+
+        output_blobs = roi_data.fast_rcnn.filter_fast_rcnn_blobs(blobs, output_blob_names, cls_scores)
+
+        for i, k in enumerate(output_blob_names):
+            blob_utils.py_op_copy_blob(output_blobs[k], outputs[i])

@@ -152,10 +152,10 @@ def evaluate_box_proposals(dataset, roidb):
     """Evaluate bounding box object proposals."""
     res = _empty_box_proposal_results()
     areas = {'all': '', 'small': 's', 'medium': 'm', 'large': 'l'}
-    for limit in [100, 1000]:
+    for limit in [100, 1000, 5000, 10000, 50000, 100000]:
         for area, suffix in areas.items():
             stats = json_dataset_evaluator.evaluate_box_proposals(
-                dataset, roidb, area=area, limit=limit
+                dataset, roidb, area=area, limit=limit, thresholds=[0.7]
             )
             key = 'AR{}@{:d}'.format(suffix, limit)
             res['box_proposal'][key] = stats['ar']

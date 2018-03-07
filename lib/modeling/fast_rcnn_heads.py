@@ -69,9 +69,10 @@ def add_fast_rcnn_outputs(model, blob_in, dim):
 def add_fast_rcnn_losses(model):
     """Add losses for RoI classification and bounding box regression."""
     cls_prob, loss_cls = model.net.SoftmaxWithLoss(
-        ['cls_score', 'labels_int32'], ['cls_prob', 'loss_cls'],
+        ['cls_score', 'labels_int32'] + (['label_loss_weights'] if cfg.TRAIN.CLS_SIZE_WEIGHTED_LOSS else []), ['cls_prob', 'loss_cls'],
         scale=1. / cfg.NUM_GPUS
     )
+
     loss_bbox = model.net.SmoothL1Loss(
         [
             'bbox_pred', 'bbox_targets', 'bbox_inside_weights',
@@ -109,3 +110,41 @@ def add_roi_2mlp_head(model, blob_in, dim_in, spatial_scale):
     model.FC('fc6', 'fc7', hidden_dim, hidden_dim)
     model.Relu('fc7', 'fc7')
     return 'fc7', hidden_dim
+
+# OHEM versions of fast-rcnn (used only during training for classification of region proposals)
+
+def add_roi_2mlp_cls_head_ohem(model, blob_in, dim_in, spatial_scale):
+    """Add a ReLU MLP with two hidden layers."""
+    hidden_dim = cfg.FAST_RCNN.MLP_HEAD_DIM
+    roi_size = cfg.FAST_RCNN.ROI_XFORM_RESOLUTION
+    roi_feat = model.RoIFeatureTransform(
+        blob_in,
+        'ohem_roi_feat',
+        blob_rois='ohem_rois',
+        method=cfg.FAST_RCNN.ROI_XFORM_METHOD,
+        resolution=roi_size,
+        sampling_ratio=cfg.FAST_RCNN.ROI_XFORM_SAMPLING_RATIO,
+        spatial_scale=spatial_scale
+    )
+    model.FCShared(roi_feat, 'ohem_fc6', dim_in * roi_size * roi_size, hidden_dim, 'fc6')
+    model.Relu('ohem_fc6', 'ohem_fc6')
+    model.FCShared('ohem_fc6', 'ohem_fc7', hidden_dim, hidden_dim, 'fc7')
+    model.Relu('ohem_fc7', 'ohem_fc7')
+
+    """Add RoI classification and softmax loss."""
+    model.FCShared(
+        'ohem_fc7',
+        'ohem_cls_score',
+        hidden_dim,
+        model.num_classes,
+        'cls_score',
+        weight_init=gauss_fill(0.01),
+        bias_init=const_fill(0.0)
+    )
+
+    ohem_cls_prob, ohem_loss_cls = model.net.SoftmaxWithLoss(
+        ['ohem_cls_score', 'ohem_labels_int32'], ['ohem_cls_prob', 'ohem_loss_cls'],
+        scale=1. / cfg.NUM_GPUS
+    )
+
+    return ohem_loss_cls

@@ -133,6 +133,10 @@ __C.TRAIN.PROPOSAL_FILES = ()
 # faster)
 __C.TRAIN.ASPECT_GROUPING = True
 
+__C.TRAIN.OHEM = False
+
+__C.TRAIN.CLS_SIZE_WEIGHTED_LOSS = False
+
 # ---------------------------------------------------------------------------- #
 # RPN training options
 # ---------------------------------------------------------------------------- #
@@ -172,6 +176,15 @@ __C.TRAIN.RPN_STRADDLE_THRESH = 0
 # Proposal height and width both need to be greater than RPN_MIN_SIZE
 # (at orig image scale; not scale used during training or inference)
 __C.TRAIN.RPN_MIN_SIZE = 0
+
+# ROIs can be weighted by differently based on thier GT area size
+# to allow learning of smaller rois
+__C.TRAIN.RPN_SIZE_WEIGHTED_LOSS = False
+
+# ensure RPN_BATCH_SIZE_PER_IM ROIs selected for training are sampled
+# evenly for each object at that image (otherwise objects with less ROIs,
+# i.e., smaller objects, get lower probability of being selected)
+__C.TRAIN.RPN_EVENLY_SELECT_POS_ROIS = False
 
 # Filter proposals that are inside of crowd regions by CROWD_FILTER_THRESH
 # "Inside" is measured as: proposal-with-crowd intersection area divided by
@@ -640,6 +653,12 @@ __C.FAST_RCNN = AttrDict()
 # The string must match a function this is imported in modeling.model_builder
 # (e.g., 'head_builder.add_roi_2mlp_head' to specify a two hidden layer MLP)
 __C.FAST_RCNN.ROI_BOX_HEAD = b''
+
+# The type of RoI head to use for bounding box classification and regression
+# that will be used for classification in OHEM .The string must match a
+# function  this is imported in modeling.model_builder# (e.g.,
+# 'head_builder.add_roi_2mlp_cls_head_ohem' # to specify a two hidden layer MLP)
+__C.FAST_RCNN.ROI_BOX_HEAD_OHEM = b''
 
 # Hidden layer dimension when using an MLP for the RoI box head
 __C.FAST_RCNN.MLP_HEAD_DIM = 1024

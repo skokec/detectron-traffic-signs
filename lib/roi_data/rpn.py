@@ -44,6 +44,7 @@ def get_rpn_blob_names(is_training=True):
             for lvl in range(cfg.FPN.RPN_MIN_LEVEL, cfg.FPN.RPN_MAX_LEVEL + 1):
                 blob_names += [
                     'rpn_labels_int32_wide_fpn' + str(lvl),
+                    'rpn_label_loss_weights_wide_fpn' + str(lvl),
                     'rpn_bbox_targets_wide_fpn' + str(lvl),
                     'rpn_bbox_inside_weights_wide_fpn' + str(lvl),
                     'rpn_bbox_outside_weights_wide_fpn' + str(lvl)
@@ -52,6 +53,7 @@ def get_rpn_blob_names(is_training=True):
             # Single level RPN blobs
             blob_names += [
                 'rpn_labels_int32_wide',
+                'rpn_label_loss_weights_wide',
                 'rpn_bbox_targets_wide',
                 'rpn_bbox_inside_weights_wide',
                 'rpn_bbox_outside_weights_wide'
@@ -194,11 +196,62 @@ def _get_rpn_blobs(im_height, im_width, foas, all_anchors, gt_boxes):
     # subsample positive labels if we have too many
     num_fg = int(cfg.TRAIN.RPN_FG_FRACTION * cfg.TRAIN.RPN_BATCH_SIZE_PER_IM)
     fg_inds = np.where(labels == 1)[0]
+
     if len(fg_inds) > num_fg:
-        disable_inds = npr.choice(
-            fg_inds, size=(len(fg_inds) - num_fg), replace=False
-        )
-        labels[disable_inds] = -1
+
+        if not cfg.TRAIN.RPN_EVENLY_SELECT_POS_ROIS:
+            disable_inds = npr.choice(
+                fg_inds, size=(len(fg_inds) - num_fg), replace=False
+            )
+            labels[disable_inds] = -1
+        else:
+            # new implementation that selects bboxes evenly for each object
+            num_gt = gt_boxes.shape[0]
+
+            # collect associated bboxes for each GT
+            bboxes_assoc_gt = []
+            for i in range(num_gt):
+                # get all bounding boxes associated with this gt
+                bboxes_gt_i = np.where(anchor_to_gt_argmax == i)[0]
+
+                # get those that are actually selected for fg class
+                bboxes_gt_i = bboxes_gt_i[labels[bboxes_gt_i] == 1]
+
+                bboxes_assoc_gt.append(bboxes_gt_i)
+
+            # evenly select positive lables to ensure all samples are considered
+            keep_ids = []
+
+            # repeat this while still some space and we have any more bboxes
+            while len(keep_ids) < num_fg and np.sum([len(x) for x in bboxes_assoc_gt]) > 0:
+
+                # get how many space left and evenly distribute it over all GTs
+                allowed_fg_per_sample = int(np.round((num_fg - len(keep_ids)) / num_gt))
+
+                added_fg = 0
+                for i in range(num_gt):
+                    if len(bboxes_assoc_gt[i]) > 0:
+                        num_select_gt_i = min(allowed_fg_per_sample, len(bboxes_assoc_gt[i]))
+                        # randomly select fg for this GT
+                        fg_seleced_for_gt_i = npr.choice(bboxes_assoc_gt[i], size=num_select_gt_i, replace=False)
+
+                        # add them to list of ids to keep
+                        keep_ids.extend(fg_seleced_for_gt_i)
+
+                        added_fg = added_fg + len(fg_seleced_for_gt_i)
+
+                        # and remove them from bboxes_assoc_gt[i] for next loop
+                        bboxes_assoc_gt[i] = np.setdiff1d(bboxes_assoc_gt[i], fg_seleced_for_gt_i)
+
+                # we add extra check to avoid infinity loops
+                if added_fg <= 0:
+                    break
+
+            # revert from keep_ids to ids that need to be removed
+            remove_ids = np.setdiff1d(np.where(labels == 1)[0], keep_ids)
+
+            labels[remove_ids] = -1
+
     fg_inds = np.where(labels == 1)[0]
 
     # subsample negative labels if we have too many
@@ -215,6 +268,16 @@ def _get_rpn_blobs(im_height, im_width, foas, all_anchors, gt_boxes):
     bbox_targets[fg_inds, :] = data_utils.compute_targets(
         anchors[fg_inds, :], gt_boxes[anchor_to_gt_argmax[fg_inds], :]
     )
+
+    # weight positive and negative lables differently, and weight smaller
+    # boxes more
+    #label_loss_weights = np.ones((num_inside,), dtype=np.float32)*0.01 # original
+    label_loss_weights = np.ones((num_inside,), dtype=np.float32)*0.01
+
+    bbox_target_area = gt_boxes[anchor_to_gt_argmax[fg_inds], 2] * gt_boxes[anchor_to_gt_argmax[fg_inds], 3]
+
+    #label_loss_weights[fg_inds] = 9**(1/np.sqrt(bbox_target_area)*100)*10 # original
+    label_loss_weights[fg_inds] = 1
 
     # Bbox regression loss has the form:
     #   loss(x) = weight_outside * L(weight_inside * x)
@@ -237,6 +300,9 @@ def _get_rpn_blobs(im_height, im_width, foas, all_anchors, gt_boxes):
 
     # Map up to original set of anchors
     labels = data_utils.unmap(labels, total_anchors, inds_inside, fill=-1)
+
+    label_loss_weights = data_utils.unmap(label_loss_weights, total_anchors, inds_inside, fill=0)
+
     bbox_targets = data_utils.unmap(
         bbox_targets, total_anchors, inds_inside, fill=0
     )
@@ -256,6 +322,7 @@ def _get_rpn_blobs(im_height, im_width, foas, all_anchors, gt_boxes):
         A = foa.num_cell_anchors
         end_idx = start_idx + H * W * A
         _labels = labels[start_idx:end_idx]
+        _label_loss_weights = label_loss_weights[start_idx:end_idx]
         _bbox_targets = bbox_targets[start_idx:end_idx, :]
         _bbox_inside_weights = bbox_inside_weights[start_idx:end_idx, :]
         _bbox_outside_weights = bbox_outside_weights[start_idx:end_idx, :]
@@ -263,6 +330,8 @@ def _get_rpn_blobs(im_height, im_width, foas, all_anchors, gt_boxes):
 
         # labels output with shape (1, A, height, width)
         _labels = _labels.reshape((1, H, W, A)).transpose(0, 3, 1, 2)
+        # label loss weights output with shape (1, A, height, width)
+        _label_loss_weights = _label_loss_weights.reshape((1, H, W, A)).transpose(0, 3, 1, 2)
         # bbox_targets output with shape (1, 4 * A, height, width)
         _bbox_targets = _bbox_targets.reshape(
             (1, H, W, A * 4)).transpose(0, 3, 1, 2)
@@ -275,6 +344,7 @@ def _get_rpn_blobs(im_height, im_width, foas, all_anchors, gt_boxes):
         blobs_out.append(
             dict(
                 rpn_labels_int32_wide=_labels,
+                rpn_label_loss_weights_wide=_label_loss_weights,
                 rpn_bbox_targets_wide=_bbox_targets,
                 rpn_bbox_inside_weights_wide=_bbox_inside_weights,
                 rpn_bbox_outside_weights_wide=_bbox_outside_weights

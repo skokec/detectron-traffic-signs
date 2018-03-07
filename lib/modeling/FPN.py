@@ -399,6 +399,12 @@ def add_fpn_rpn_losses(model):
             ['rpn_labels_int32_wide_fpn' + slvl, 'rpn_cls_logits_fpn' + slvl],
             'rpn_labels_int32_fpn' + slvl
         )
+        if cfg.TRAIN.RPN_SIZE_WEIGHTED_LOSS:
+            model.net.SpatialNarrowAs(
+                ['rpn_label_loss_weights_wide_fpn' + slvl, 'rpn_cls_logits_fpn' + slvl],
+                'rpn_label_loss_weights_fpn' + slvl
+            )
+
         for key in ('targets', 'inside_weights', 'outside_weights'):
             model.net.SpatialNarrowAs(
                 [
@@ -407,15 +413,26 @@ def add_fpn_rpn_losses(model):
                 ],
                 'rpn_bbox_' + key + '_fpn' + slvl
             )
-        loss_rpn_cls_fpn = model.net.SigmoidCrossEntropyLoss(
-            ['rpn_cls_logits_fpn' + slvl, 'rpn_labels_int32_fpn' + slvl],
-            'loss_rpn_cls_fpn' + slvl,
-            normalize=0,
-            scale=(
-                1. / cfg.NUM_GPUS / cfg.TRAIN.RPN_BATCH_SIZE_PER_IM /
-                cfg.TRAIN.IMS_PER_BATCH
+        if cfg.TRAIN.RPN_SIZE_WEIGHTED_LOSS:
+            loss_rpn_cls_fpn = model.net.WeightedSigmoidCrossEntropyLoss(
+                ['rpn_cls_logits_fpn' + slvl, 'rpn_labels_int32_fpn' + slvl, 'rpn_label_loss_weights_fpn' + slvl],
+                'loss_rpn_cls_fpn' + slvl,
+                normalize=0,
+                scale=(
+                    1. / cfg.NUM_GPUS / cfg.TRAIN.RPN_BATCH_SIZE_PER_IM /
+                    cfg.TRAIN.IMS_PER_BATCH
+                )
             )
-        )
+        else:
+            loss_rpn_cls_fpn = model.net.SigmoidCrossEntropyLoss(
+                ['rpn_cls_logits_fpn' + slvl, 'rpn_labels_int32_fpn' + slvl],
+                'loss_rpn_cls_fpn' + slvl,
+                normalize=0,
+                scale=(
+                    1. / cfg.NUM_GPUS / cfg.TRAIN.RPN_BATCH_SIZE_PER_IM /
+                    cfg.TRAIN.IMS_PER_BATCH
+                )
+            )
         # Normalization by (1) RPN_BATCH_SIZE_PER_IM and (2) IMS_PER_BATCH is
         # handled by (1) setting bbox outside weights and (2) SmoothL1Loss
         # normalizes by IMS_PER_BATCH

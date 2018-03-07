@@ -60,14 +60,16 @@ def generate_rpn_on_dataset(multi_gpu=False):
     dataset = JsonDataset(cfg.TEST.DATASET)
     test_timer = Timer()
     test_timer.tic()
-    if multi_gpu:
-        num_images = len(dataset.get_roidb())
-        _boxes, _scores, _ids, rpn_file = multi_gpu_generate_rpn_on_dataset(
-            num_images, output_dir
-        )
-    else:
-        # Processes entire dataset range by default
-        _boxes, _scores, _ids, rpn_file = generate_rpn_on_range()
+    rpn_file = os.path.join(output_dir,'rpn_proposals.pkl')
+    if not os.path.exists(rpn_file):
+        if multi_gpu:
+            num_images = len(dataset.get_roidb())
+            _boxes, _scores, _ids, rpn_file = multi_gpu_generate_rpn_on_dataset(
+                num_images, output_dir
+            )
+        else:
+            # Processes entire dataset range by default
+            _boxes, _scores, _ids, rpn_file = generate_rpn_on_range()
     test_timer.toc()
     logger.info('Total inference time: {:.3f}s'.format(test_timer.average_time))
     return evaluate_proposal_file(dataset, rpn_file, output_dir)

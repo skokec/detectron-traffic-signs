@@ -86,7 +86,8 @@ def generalized_rcnn(model):
         add_roi_box_head_func=get_func(cfg.FAST_RCNN.ROI_BOX_HEAD),
         add_roi_mask_head_func=get_func(cfg.MRCNN.ROI_MASK_HEAD),
         add_roi_keypoint_head_func=get_func(cfg.KRCNN.ROI_KEYPOINTS_HEAD),
-        freeze_conv_body=cfg.TRAIN.FREEZE_CONV_BODY
+        add_roi_box_head_ohem_func=get_func(cfg.FAST_RCNN.ROI_BOX_HEAD_OHEM),
+        freeze_conv_body=cfg.TRAIN.FREEZE_CONV_BODY,
     )
 
 
@@ -151,7 +152,8 @@ def build_generic_detection_model(
     add_roi_box_head_func=None,
     add_roi_mask_head_func=None,
     add_roi_keypoint_head_func=None,
-    freeze_conv_body=False
+    add_roi_box_head_ohem_func = None,
+    freeze_conv_body=False,
 ):
     def _single_gpu_build_func(model):
         """Build the model on a single GPU. Can be called in a loop over GPUs
@@ -176,10 +178,12 @@ def build_generic_detection_model(
             'keypoints': None,
         }
 
+        do_OHEM = model.train and cfg.TRAIN.OHEM
+
         if cfg.RPN.RPN_ON:
             # Add the RPN head
             head_loss_gradients['rpn'] = rpn_heads.add_generic_rpn_outputs(
-                model, blob_conv, dim_conv, spatial_scale_conv
+                model, blob_conv, dim_conv, spatial_scale_conv, ohem = do_OHEM
             )
 
         if cfg.FPN.FPN_ON:
@@ -188,6 +192,13 @@ def build_generic_detection_model(
             blob_conv, spatial_scale_conv = _narrow_to_fpn_roi_levels(
                 blob_conv, spatial_scale_conv
             )
+
+        if do_OHEM:
+            rpn_heads.add_generic_rpn_ohem_classifier(
+                model, add_roi_box_head_ohem_func, blob_conv, dim_conv,
+                spatial_scale_conv
+            )
+
 
         if not cfg.MODEL.RPN_ONLY:
             # Add the Fast R-CNN head

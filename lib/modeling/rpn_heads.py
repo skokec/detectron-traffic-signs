@@ -25,12 +25,13 @@ from utils.c2 import gauss_fill
 import modeling.FPN as FPN
 import utils.blob as blob_utils
 
+from modeling.fast_rcnn_heads import add_roi_2mlp_cls_head_ohem
 
 # ---------------------------------------------------------------------------- #
 # RPN and Faster R-CNN outputs and losses
 # ---------------------------------------------------------------------------- #
 
-def add_generic_rpn_outputs(model, blob_in, dim_in, spatial_scale_in):
+def add_generic_rpn_outputs(model, blob_in, dim_in, spatial_scale_in, ohem = False):
     """Add RPN outputs (objectness classification and bounding box regression)
     to an RPN model. Abstracts away the use of FPN.
     """
@@ -41,18 +42,26 @@ def add_generic_rpn_outputs(model, blob_in, dim_in, spatial_scale_in):
         if cfg.MODEL.FASTER_RCNN:
             # CollectAndDistributeFpnRpnProposals also labels proposals when in
             # training mode
-            model.CollectAndDistributeFpnRpnProposals()
+            model.CollectAndDistributeFpnRpnProposals(ohem=ohem)
         if model.train:
             loss_gradients = FPN.add_fpn_rpn_losses(model)
     else:
         # Not using FPN, add RPN to a single scale
-        add_single_scale_rpn_outputs(model, blob_in, dim_in, spatial_scale_in)
+        add_single_scale_rpn_outputs(model, blob_in, dim_in, spatial_scale_in, ohem=ohem)
         if model.train:
             loss_gradients = add_single_scale_rpn_losses(model)
+
+    # if we are in training and OHEM requested then add classification head from fast-rcnn (but without gradients) to find hard examples
     return loss_gradients
 
+def add_generic_rpn_ohem_classifier(model, add_roi_box_head_ohem_func, blob_in, dim_in, spatial_scale_in):
+    # add ROI, 2x FC layers and a classification layer to find hard examples
+    add_roi_box_head_ohem_func(model, blob_in, dim_in, spatial_scale_in)
 
-def add_single_scale_rpn_outputs(model, blob_in, dim_in, spatial_scale):
+    # create new ROI by retaining examples with large loss
+    model.GenerateHardProposalLabels(['ohem_cls_score'])
+
+def add_single_scale_rpn_outputs(model, blob_in, dim_in, spatial_scale, ohem=False):
     """Add RPN outputs to a single scale model (i.e., no FPN)."""
     anchors = generate_anchors(
         stride=1. / spatial_scale,
@@ -116,7 +125,7 @@ def add_single_scale_rpn_outputs(model, blob_in, dim_in, spatial_scale):
     if cfg.MODEL.FASTER_RCNN:
         if model.train:
             # Add op that generates training labels for in-network RPN proposals
-            model.GenerateProposalLabels(['rpn_rois', 'roidb', 'im_info'])
+            model.GenerateProposalLabels(['rpn_rois', 'roidb', 'im_info'], ohem=ohem)
         else:
             # Alias rois to rpn_rois for inference
             model.net.Alias('rpn_rois', 'rois')
@@ -129,15 +138,30 @@ def add_single_scale_rpn_losses(model):
     model.net.SpatialNarrowAs(
         ['rpn_labels_int32_wide', 'rpn_cls_logits'], 'rpn_labels_int32'
     )
+
+    if cfg.TRAIN.RPN_SIZE_WEIGHTED_LOSS:
+        model.net.SpatialNarrowAs(
+            ['rpn_label_loss_weights_wide', 'rpn_cls_logits'],
+            'rpn_label_loss_weights_wide'
+        )
+
     for key in ('targets', 'inside_weights', 'outside_weights'):
         model.net.SpatialNarrowAs(
             ['rpn_bbox_' + key + '_wide', 'rpn_bbox_pred'], 'rpn_bbox_' + key
         )
-    loss_rpn_cls = model.net.SigmoidCrossEntropyLoss(
-        ['rpn_cls_logits', 'rpn_labels_int32'],
-        'loss_rpn_cls',
-        scale=1. / cfg.NUM_GPUS
-    )
+
+    if cfg.TRAIN.RPN_SIZE_WEIGHTED_LOSS:
+        loss_rpn_cls = model.net.WeightedSigmoidCrossEntropyLoss(
+            ['rpn_cls_logits', 'rpn_labels_int32', 'rpn_label_loss_weights_wide'],
+            'loss_rpn_cls',
+            scale=1. / cfg.NUM_GPUS
+        )
+    else:
+        loss_rpn_cls = model.net.SigmoidCrossEntropyLoss(
+            ['rpn_cls_logits', 'rpn_labels_int32'],
+            'loss_rpn_cls',
+            scale=1. / cfg.NUM_GPUS
+        )
     loss_rpn_bbox = model.net.SmoothL1Loss(
         [
             'rpn_bbox_pred', 'rpn_bbox_targets', 'rpn_bbox_inside_weights',

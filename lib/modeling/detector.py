@@ -26,15 +26,21 @@ import logging
 from caffe2.python import cnn
 from caffe2.python import core
 from caffe2.python import workspace
+from caffe2.python.modeling import initializers
+from caffe2.python.modeling.parameter_info import ParameterTags
+
 
 from core.config import cfg
 from ops.collect_and_distribute_fpn_rpn_proposals \
     import CollectAndDistributeFpnRpnProposalsOp
 from ops.generate_proposal_labels import GenerateProposalLabelsOp
+from ops.generate_proposal_labels import GenerateHardProposalLabelsOp
 from ops.generate_proposals import GenerateProposalsOp
 from utils import lr_policy
 import roi_data.fast_rcnn
 import utils.c2 as c2_utils
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +139,7 @@ class DetectionModelHelper(cnn.CNNModelHelper):
         )(blobs_in, blobs_out, name=name)
         return blobs_out
 
-    def GenerateProposalLabels(self, blobs_in):
+    def GenerateProposalLabels(self, blobs_in, ohem = False):
         """Op for generating training labels for RPN proposals. This is used
         when training RPN jointly with Fast/Mask R-CNN (as in end-to-end
         Faster R-CNN training).
@@ -156,16 +162,56 @@ class DetectionModelHelper(cnn.CNNModelHelper):
         # the specific model being trained. Query the data loader to get the
         # list of output blob names.
         blobs_out = roi_data.fast_rcnn.get_fast_rcnn_blob_names(
-            is_training=self.train
+            is_training=self.train, ohem=ohem
         )
         blobs_out = [core.ScopedBlobReference(b) for b in blobs_out]
 
-        self.net.Python(GenerateProposalLabelsOp().forward)(
+        self.net.Python(GenerateProposalLabelsOp(ohem=ohem).forward)(
             blobs_in, blobs_out, name=name
         )
         return blobs_out
 
-    def CollectAndDistributeFpnRpnProposals(self):
+    def GenerateHardProposalLabels(self, blobs_in):
+        """Op for generating training labels for RPN proposals. This is used
+        when training RPN jointly with Fast/Mask R-CNN (as in end-to-end
+        Faster R-CNN training).
+
+        blobs_in:
+          - 'ohem_rois'
+          - 'ohem_cls_score': 2D tensor for classification loss of all proposals
+          - (variable set of blobs): blobs from GenerateProposalLabels are
+            inputted here and filtered base on classi
+
+        blobs_out:
+          - (variable set of blobs): returns whatever blobs are required for
+            training the model. It does this by querying the data loader for
+            the list of blobs that are needed.
+        """
+
+        # This list of input blobs depends on list of output blobs for
+        # GenerateProposalLabels + 'ohem_loss_cls' (from blobs_in)
+        blobs_in = blobs_in + roi_data.fast_rcnn.get_fast_rcnn_blob_names(
+            is_training=self.train, ohem=True
+        )
+
+        name = 'GenerateHardProposalLabelsOp:' + ','.join(
+            [str(b) for b in blobs_in]
+        )
+
+        # The list of blobs is not known before run-time because it depends on
+        # the specific model being trained. Query the data loader to get the
+        # list of output blob names.
+        blobs_out = roi_data.fast_rcnn.get_fast_rcnn_blob_names(
+            is_training=self.train
+        )
+        blobs_out = [core.ScopedBlobReference(b) for b in blobs_out]
+
+        self.net.Python(GenerateHardProposalLabelsOp().forward)(
+            blobs_in, blobs_out, name=name
+        )
+        return blobs_out
+
+    def CollectAndDistributeFpnRpnProposals(self, ohem = False):
         """Merge RPN proposals generated at multiple FPN levels and then
         distribute those proposals to their appropriate FPN levels. An anchor
         at one FPN level may predict an RoI that will map to another level,
@@ -211,12 +257,12 @@ class DetectionModelHelper(cnn.CNNModelHelper):
 
         # Prepare output blobs
         blobs_out = roi_data.fast_rcnn.get_fast_rcnn_blob_names(
-            is_training=self.train
+            is_training=self.train, ohem=ohem
         )
         blobs_out = [core.ScopedBlobReference(b) for b in blobs_out]
 
         outputs = self.net.Python(
-            CollectAndDistributeFpnRpnProposalsOp(self.train).forward
+            CollectAndDistributeFpnRpnProposalsOp(self.train, ohem=ohem).forward
         )(blobs_in, blobs_out, name=name)
 
         return outputs
@@ -330,6 +376,48 @@ class DetectionModelHelper(cnn.CNNModelHelper):
         return self.net.Conv(
             blobs_in, blob_out, kernel=kernel, order=self.order, **kwargs
         )
+
+    def FCShared(self, blob_in, blob_out, dim_in, dim_out, shared_blob_name, weight_init=None,
+        bias_init=None, WeightInitializer=None, BiasInitializer=None,
+        enable_tensor_core=False, float16_compute=False, **kwargs):
+
+        WeightInitializer = initializers.update_initializer(
+            WeightInitializer, weight_init, ("XavierFill", {})
+        )
+        BiasInitializer = initializers.update_initializer(
+            BiasInitializer, bias_init, ("ConstantFill", {})
+        )
+        if not self.init_params:
+            WeightInitializer = initializers.ExternalInitializer()
+            BiasInitializer = initializers.ExternalInitializer()
+
+        blob_out = blob_out or self.net.NextName()
+        bias_tags = [ParameterTags.BIAS]
+        if 'freeze_bias' in kwargs:
+            bias_tags.append(ParameterTags.COMPUTED_PARAM)
+
+        weight = self.create_param(
+            param_name=shared_blob_name + '_w',
+            shape=[dim_out, dim_in],
+            initializer=WeightInitializer,
+            tags=ParameterTags.WEIGHT
+        )
+        bias = self.create_param(
+            param_name=shared_blob_name + '_b',
+            shape=[dim_out, ],
+            initializer=BiasInitializer,
+            tags=bias_tags
+        )
+
+        # enable TensorCore by setting appropriate engine
+        if enable_tensor_core:
+            kwargs['engine'] = 'TENSORCORE'
+
+        # Enable float 16 compute kernel (relevant for CUDA)
+        if float16_compute:
+            kwargs['float16_compute'] = True
+
+        return self.net.FC([blob_in, weight, bias], blob_out, **kwargs)
 
     def BilinearInterpolation(
         self, blob_in, blob_out, dim_in, dim_out, up_scale

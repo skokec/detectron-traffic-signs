@@ -52,6 +52,9 @@ DATASETS = {
     'dfg_e5_coordBased_train': get_villard_database(_DFG_DB_DIR, 'dataset_extended_5', 'DFG_FasterRCNNformat_coordBased', 'e5_coordBased', 'train'),
     'dfg_e5_coordBased_test': get_villard_database(_DFG_DB_DIR, 'dataset_extended_5', 'DFG_FasterRCNNformat_coordBased', 'e5_coordBased', 'test'),
 
+    'dfg_e5_aug_coordBased_train': get_villard_database(_DFG_DB_DIR, 'dataset_extended_5', 'DFG_FasterRCNNformat_coordBased', 'e5_coordBased_wgFr', 'train'),
+    'dfg_e5_aug_coordBased_test': get_villard_database(_DFG_DB_DIR, 'dataset_extended_5', 'DFG_FasterRCNNformat_coordBased', 'e5_coordBased_wgFr', 'test'),
+
     'swedish_set1train_set2test_train': get_villard_database(_SWEDISH_DB_DIR, '', 'swedish_FasterRCNNformat', 'set1train_set2test', 'train'),
     'swedish_set1train_set2test_test': get_villard_database(_SWEDISH_DB_DIR, '','swedish_FasterRCNNformat', 'set1train_set2test', 'test'),
 

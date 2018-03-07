@@ -328,7 +328,7 @@ class JsonDataset(object):
         return gt_kps
 
 
-def add_proposals(roidb, rois, scales, crowd_thresh):
+def add_proposals(roidb, rois, scales, crowd_thresh, tmp = None):
     """Add proposal boxes (rois) to an roidb that has ground-truth annotations
     but no proposals. If the proposals are not at the original image scale,
     specify the scale factor that separate them in scales.
@@ -338,13 +338,13 @@ def add_proposals(roidb, rois, scales, crowd_thresh):
         inv_im_scale = 1. / scales[i]
         idx = np.where(rois[:, 0] == i)[0]
         box_list.append(rois[idx, 1:] * inv_im_scale)
-    _merge_proposal_boxes_into_roidb(roidb, box_list)
+    _merge_proposal_boxes_into_roidb(roidb, box_list, tmp)
     if crowd_thresh > 0:
         _filter_crowd_proposals(roidb, crowd_thresh)
     _add_class_assignments(roidb)
 
 
-def _merge_proposal_boxes_into_roidb(roidb, box_list):
+def _merge_proposal_boxes_into_roidb(roidb, box_list, tmp = None):
     """Add proposal boxes to each roidb entry."""
     assert len(box_list) == len(roidb)
     for i, entry in enumerate(roidb):
@@ -369,6 +369,30 @@ def _merge_proposal_boxes_into_roidb(roidb, box_list):
                 boxes.astype(dtype=np.float32, copy=False),
                 gt_boxes.astype(dtype=np.float32, copy=False)
             )
+
+            gt_hist = np.count_nonzero(proposal_to_gt_overlaps > 0.5, axis=0)
+            if np.any(gt_hist < 5):
+                gt_min_size = np.min(np.array([gt_boxes[:,2]-gt_boxes[:,0],
+                                               gt_boxes[:, 3] - gt_boxes[:, 1]]),axis=0);
+                print('found non-coverd GT overlap histogram:',gt_hist, 'with gt sizes:', gt_min_size)
+
+            if tmp is not None and False:
+                gt_min_size = np.min(np.array([gt_boxes[:, 2] - gt_boxes[:, 0],
+                                               gt_boxes[:, 3] - gt_boxes[:, 1]]), axis=0);
+
+                h = np.histogram(gt_min_size, weights=gt_hist, bins=100, range=(20,400))
+                tmp['i'] = tmp['i'] + 1
+
+                h = np.array(h)
+
+                if tmp['i'] == 1:
+                    tmp['val'] = h
+                else:
+                    tmp['val'] = tmp['val'] + h
+
+                if tmp['i'] % 10 == 0:
+                    print(tmp['val'])
+
             # Gt box that overlaps each input box the most
             # (ties are broken arbitrarily by class order)
             argmaxes = proposal_to_gt_overlaps.argmax(axis=1)
