@@ -35,6 +35,7 @@ import cPickle as pickle
 import os
 import sys
 import numpy as np
+import scipy.io as scio
 
 from core.config import assert_and_infer_cfg
 from core.config import cfg
@@ -42,6 +43,7 @@ from core.config import merge_cfg_from_file
 from core.config import merge_cfg_from_list
 from core.config import get_output_dir
 from datasets.json_dataset import JsonDataset
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Convert results to text format that can be read by matlab scripts')
@@ -110,8 +112,21 @@ def convert_from_cls_format(cls_boxes, cls_segms, cls_keyps):
 
 def export_txt(dataset, detections_folder, output_path, limit = -1):
 
+    if output_path is None:
+        output_path = detections_folder
+
     ds = JsonDataset(dataset)
     #detections_folder = get_output_dir(training=False)
+
+    # convert region proposals from pkl to mat format if exist
+    region_proposals_pkl = os.path.join(detections_folder, 'rpn_proposals.pkl')
+
+    if os.path.exists(region_proposals_pkl):
+        with open(region_proposals_pkl, 'r') as f:
+            region_proposals = pickle.load(f)
+
+            scio.savemat(os.path.join(output_path,'rpn_proposals.mat'), region_proposals)
+
 
     detections_pkl = os.path.join(detections_folder, 'detections.pkl')
 
@@ -128,8 +143,6 @@ def export_txt(dataset, detections_folder, output_path, limit = -1):
         else:
             return val[ix]
 
-    if output_path is None:
-        output_path = detections_folder
 
     output_file = os.path.join(output_path,'detections.txt')
 
