@@ -7,9 +7,9 @@ The following changes are included:
 - modifed selection of training ROIs to cover small and large regions evenly
 - added weights to loss of background samples during training (weight of 0.01 for RPN and 0.1 for classification)
 
-JSON definition files of detectron models for the [DFG-dataset](https://www.vicos.si/Downloads/DFGTSD) are available below:
- - [detectron-model-json-DFG-dataset.zip](http://box.vicos.si/skokec/villard/detectron-model-json-DFG-dataset.zip)
- - [detectron-model-json-DFG-dataset-augmented.zip](http://box.vicos.si/skokec/villard/detectron-model-json-DFG-dataset-augmented.zip)
+YAML definition files of detectron models for the [DFG-dataset](https://www.vicos.si/Downloads/DFGTSD) are available below:
+ - [detectron-model-yaml-DFG-dataset.zip](http://box.vicos.si/skokec/villard/detectron-model-yaml-DFG-dataset.zip)
+ - [detectron-model-yaml-DFG-dataset-augmented.zip](http://box.vicos.si/skokec/villard/detectron-model-yaml-DFG-dataset-augmented.zip)
 
 Each zip contains models based on ResNet101_FPN and ResNet50_FPN that have enabled OHEM (`OHEM: True`), even selection of small and large ROIs (`RPN_EVENLY_SELECT_POS_ROIS: True`) and weighting of pos/neg classes (`RPN_SIZE_WEIGHTED_LOSS: True` and `CLS_SIZE_WEIGHTED_LOSS: True`).
 
