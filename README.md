@@ -1,3 +1,19 @@
+# Detectron for Traffic Signs
+
+This branch contains fixes for the Detectron code that allows aplication on domains with many small objects, specifically it was designed for traffic sign detection.
+
+The following changes are included:
+- integrated Online Hard Negative Minning ([OHEM](https://arxiv.org/abs/1604.03540))
+- modifed selection of training ROIs to cover small and large regions evenly
+- added weights to loss of background samples during training (weight of 0.01 for RPN and 0.1 for classification)
+
+YAML definition files of detectron models for the [DFG-dataset](https://www.vicos.si/Downloads/DFGTSD) are available below:
+ - [detectron-model-yaml-DFG-dataset.zip](http://box.vicos.si/skokec/villard/detectron-model-yaml-DFG-dataset.zip)
+ - [detectron-model-yaml-DFG-dataset-augmented.zip](http://box.vicos.si/skokec/villard/detectron-model-yaml-DFG-dataset-augmented.zip)
+
+Each zip contains models based on ResNet101_FPN and ResNet50_FPN that have enabled OHEM (`OHEM: True`), even selection of small and large ROIs (`RPN_EVENLY_SELECT_POS_ROIS: True`) and weighting of pos/neg classes (`RPN_SIZE_WEIGHTED_LOSS: True` and `CLS_SIZE_WEIGHTED_LOSS: True`).
+
+
 # Detectron
 
 Detectron is Facebook AI Research's software system that implements state-of-the-art object detection algorithms, including [Mask R-CNN](https://arxiv.org/abs/1703.06870). It is written in Python and powered by the [Caffe2](https://github.com/caffe2/caffe2) deep learning framework.
