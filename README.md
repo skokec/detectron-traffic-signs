@@ -13,6 +13,19 @@ YAML definition files of detectron models for the [DFG-dataset](https://www.vico
 
 Each zip contains models based on ResNet101_FPN and ResNet50_FPN that have enabled OHEM (`OHEM: True`), even selection of small and large ROIs (`RPN_EVENLY_SELECT_POS_ROIS: True`) and weighting of pos/neg classes (`RPN_SIZE_WEIGHTED_LOSS: True` and `CLS_SIZE_WEIGHTED_LOSS: True`).
 
+## Installation
+
+Our changes to the code require custom `WeightedSigmoidCrossEntropyLoss` operation (for `RPN_SIZE_WEIGHTED_LOSS` and `CLS_SIZE_WEIGHTED_LOSS` options) which is implemented in the `DETECTRON_PATH/caffe2-modules/` folder. All files in `DETECTRON_PATH/caffe2-modules/*` need to be coppied into your caffe2 source (`CAFFE2_SRC_PATH/modules/detectron`).
+
+```bash
+export DETECTRON_PATH=/path/to/detectron
+export CAFFE2_SRC_PATH=/path/to/caffe2_source
+
+cp $DETECTRON_PATH/caffe2-modules/* $CAFFE2_SRC_PATH/modules/detectron
+```
+
+After copying `caffe2-modules/*` caffe2 proceed with the instalation instructions for caffe2 and Detectron in [`INSTALL.md`](INSTALL.md)
+
 
 # Detectron
 
