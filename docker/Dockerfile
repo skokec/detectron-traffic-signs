@@ -2,7 +2,7 @@
 FROM nvidia/cuda:8.0-cudnn6-devel-ubuntu16.04
 
 # Set environment variables
-ENV CAFFE2_SRC_PATH /caffe2_build
+ENV CAFFE2_SRC_PATH /caffe2
 ENV DETECTRON_PATH /detectron
 ENV COCOAPI_PATH /cocoapi
 
@@ -78,14 +78,10 @@ RUN mkdir build && cd build \
     -DCUDA_ARCH_BIN="35 52 60 61" \
     -DCUDA_ARCH_PTX="61" \
     -DUSE_NNPACK=OFF \
-    -DUSE_ROCKSDB=OFF \
-    && make -j"$(nproc)" install \
-    && ldconfig \
-    && make clean \
-    && cd .. \
-    && rm -rf build
+    -DUSE_ROCKSDB=OFF
+RUN make -j"$(nproc)"
+RUN ldconfig && cp -r build /usr/local/caffe2
 ENV PYTHONPATH /usr/local/caffe2:${PYTHONPATH}
-ENV LD_LIBRARY_PATH /usr/local/caffe2/lib:${LD_LIBRARY_PATH}
 
 # Install the COCO API
 RUN git clone https://github.com/cocodataset/cocoapi.git $COCOAPI_PATH
