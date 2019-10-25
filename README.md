@@ -1,6 +1,6 @@
 # Detectron for Traffic Signs
 
-This branch contains fixes for the Detectron code that allows aplication on domains with many small objects, specifically it was designed for traffic sign detection.
+This branch contains fixes for the Detectron code that allows aplication on domains with many small objects, specifically it was designed for traffic sign detection from the [*"Deep Learning for Large-Scale Traffic-Sign Detection and Recognition"* ITS 2019](https://prints.vicos.si/publications/369) journal paper.
 
 The following changes are included:
 - integrated Online Hard Negative Minning ([OHEM](https://arxiv.org/abs/1604.03540))
@@ -12,6 +12,11 @@ YAML definition files of detectron models for the [DFG-dataset](https://www.vico
  - [detectron-model-yaml-DFG-dataset-augmented.zip](http://box.vicos.si/skokec/villard/detectron-model-yaml-DFG-dataset-augmented.zip)
 
 Each zip contains models based on ResNet101_FPN and ResNet50_FPN that have enabled OHEM (`OHEM: True`), even selection of small and large ROIs (`RPN_EVENLY_SELECT_POS_ROIS: True`) and weighting of pos/neg classes (`RPN_SIZE_WEIGHTED_LOSS: True` and `CLS_SIZE_WEIGHTED_LOSS: True`).
+
+You can download weights trained on DFG-Dataset for the upper model in:
+ - [dfg_mask_rcnn_weights.tar.gz](http://box.vicos.si/skokec/villard/dfg_mask_rcnn_weights.tar.gz)
+
+Note: Due to slight update of the DFG dataset the resulty may vary from the ITS 2019 paper
 
 ## Installation
 
@@ -26,6 +31,20 @@ cp $DETECTRON_PATH/caffe2-modules/* $CAFFE2_SRC_PATH/modules/detectron
 
 After copying `caffe2-modules/*` caffe2 proceed with the instalation instructions for caffe2 and Detectron in [`INSTALL.md`](INSTALL.md)
 
+## Citation
+
+Please cite our [ITS 2019 paper](https://prints.vicos.si/publications/369) when using modifications for Detectron from this repository or for the [DFG dataset](https://www.vicos.si/Downloads/DFGTSD):
+
+```
+ @article{Tabernik2019ITS,
+    author = {Tabernik, Domen and Sko{\v{c}}aj, Danijel},
+    journal = {IEEE Transactions on Intelligent Transportation Systems},
+    title = {{Deep Learning for Large-Scale Traffic-Sign Detection and Recognition}},
+    year = {2019},
+    doi={10.1109/TITS.2019.2913588}, 
+    ISSN={1524-9050}
+ }
+```
 
 # Detectron
 
