@@ -44,6 +44,7 @@ import datasets.dummy_datasets as dummy_datasets
 import utils.c2 as c2_utils
 import utils.logging
 import utils.vis as vis_utils
+import numpy as np
 
 c2_utils.import_detectron_ops()
 # OpenCL may be enabled by default in OpenCV3; disable it because it's not
@@ -75,6 +76,13 @@ def parse_args():
         type=str
     )
     parser.add_argument(
+        '--output-detection-dir',
+        dest='output_detection_dir',
+        help='directory for outputing detections (default: NONE - does not output detections)',
+        default='',
+        type=str
+    )
+    parser.add_argument(
         '--image-ext',
         dest='image_ext',
         help='image file name extension (default: jpg)',
@@ -88,6 +96,12 @@ def parse_args():
         parser.print_help()
         sys.exit(1)
     return parser.parse_args()
+
+
+def get_class_string(class_index, score, dataset):
+    class_text = dataset.classes[class_index] if dataset is not None else \
+        'id{:d}'.format(class_index)
+    return class_text
 
 
 def main(args):
@@ -104,9 +118,15 @@ def main(args):
     else:
         im_list = [args.im_or_folder]
 
+    im_list = sorted(im_list)
+
+    fn = None
+    if len(args.output_detection_dir) > 0:
+        fn = open(os.path.join(args.output_detection_dir,'detections.txt'), 'w')
+
     for i, im_name in enumerate(im_list):
         out_name = os.path.join(
-            args.output_dir, '{}'.format(os.path.basename(im_name) + '.pdf')
+            args.output_dir, '{}'.format(os.path.basename(im_name) + '.png')
         )
         logger.info('Processing {} -> {}'.format(im_name, out_name))
         im = cv2.imread(im_name)
@@ -125,9 +145,27 @@ def main(args):
                 'rest (caches and auto-tuning need to warm up)'
             )
 
+        if len(args.output_detection_dir) > 0 :
+            if isinstance(cls_boxes, list):
+                boxes, segms, keypoints, classes = vis_utils.convert_from_cls_format(
+                    cls_boxes, cls_segms, cls_keyps)
+
+                fn.write(os.path.basename(im_name))
+                fn.write('\n')
+
+                if boxes is not None:
+                    for i, box in enumerate(boxes):
+                        bbox = box[:4]
+                        score = box[-1]
+
+                        fn.write(get_class_string(classes[i], score, dummy_dfg200_dataset)+' '+str(score)+' ')
+                        fn.write(str(bbox[0])+' '+str(bbox[1])+' '+str(bbox[2]-bbox[0])+' '+str(bbox[3]-bbox[1]))
+                        fn.write('\n')
+                fn.flush()
+
         vis_utils.vis_one_image(
             im[:, :, ::-1],  # BGR -> RGB for visualization
-            im_name,
+            os.path.basename(im_name),
             args.output_dir,
             cls_boxes,
             cls_segms,
@@ -135,11 +173,12 @@ def main(args):
             dataset=dummy_dfg200_dataset,
             box_alpha=0.3,
             show_class=True,
-            thresh=0.7,
+            thresh=0.4,
             kp_thresh=2,
             ext='png'
         )
-
+    if fn is not None:
+        fn.close()
 
 if __name__ == '__main__':
     workspace.GlobalInit(['caffe2', '--caffe2_log_level=0'])
