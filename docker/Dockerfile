@@ -1,15 +1,18 @@
-# Use nvidia/cuda image as parent image
-FROM nvidia/cuda:8.0-cudnn6-devel-ubuntu16.04
+ARG CUDA_VERSION=10.0-cudnn7
+ARG OS_VERSION=ubuntu16.04
+
+FROM nvidia/cuda:${CUDA_VERSION}-devel-${OS_VERSION} as detectron-build
+LABEL maintainer "domen.tabernik@fri.uni-lj.si"
 
 # Set environment variables
-ENV CAFFE2_SRC_PATH /caffe2
-ENV DETECTRON_PATH /detectron
-ENV COCOAPI_PATH /cocoapi
+ENV CAFFE2_SRC_PATH /opt/caffe2
+ENV CAFFE2_INSTALL_PATH /opt/caffe2-install
+ENV DETECTRON_PATH /opt/detectron
+ENV COCOAPI_PATH /opt/cocoapi
 
 # Install Basic dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends --allow-change-held-packages \
     build-essential \
-    cmake \
     git \
     libgflags-dev \
     libgoogle-glog-dev \
@@ -18,11 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libleveldb-dev \
     liblmdb-dev \
     libopencv-dev \
-    libopenmpi-dev \
     libprotobuf-dev \
     libsnappy-dev \
-    openmpi-bin \
-    openmpi-doc \
     protobuf-compiler \
     python-dev \
     python-numpy \
@@ -30,17 +30,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-pydot \
     python-setuptools \
     python-scipy \
-    && rm -rf /var/lib/apt/lists/*
+    libnccl2 \
+    libnccl-dev \
+    wget \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# install cmake >= v3.14 since caffe2 will not compile correctly with older versions
+RUN cd /tmp && wget https://github.com/Kitware/CMake/releases/download/v3.17.1/cmake-3.17.1-Linux-x86_64.sh && \
+    sh cmake-3.17.1-Linux-x86_64.sh --prefix=/usr/local --exclude-subdir --skip-license && rm /tmp/cmake-*.sh
+
 
 # Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-RUN pip install --no-cache-dir \
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir \
     Cython \
     flask \
     future \
-    graphviz \
     hypothesis \
-    jupyter \
     matplotlib \
     mock \
     numpy \
@@ -48,19 +54,18 @@ RUN pip install --no-cache-dir \
     protobuf \
     pydot \
     python-nvd3 \
-    pyyaml \
+    pyyaml==3.12 \
     requests \
     scikit-image \
     scipy \
-    setuptools \
-    six \
-    tornado
+    setuptools==38.4.0 \
+    six
 
 # Clone Detectron repository
-RUN git clone https://github.com/skokec/detectron-traffic-signs.git $DETECTRON_PATH
+RUN git clone --depth 1 https://github.com/skokec/detectron-traffic-signs.git $DETECTRON_PATH
 
-# Clone Caffe2 repository
-RUN git clone --branch move-to-pytorch https://github.com/caffe2/caffe2.git $CAFFE2_SRC_PATH
+# Clone Caffe2 repository, fix submodules, add detectron files and install
+RUN git clone --depth 1 --branch move-to-pytorch https://github.com/caffe2/caffe2.git $CAFFE2_SRC_PATH
 WORKDIR $CAFFE2_SRC_PATH
 RUN git rm -r third_party/nervanagpu && git rm -r third_party/aten
 RUN git submodule add --force -b old_master https://github.com/zdevito/aten third_party/aten
@@ -68,29 +73,89 @@ RUN git submodule init
 RUN git config submodule.third_party/eigen.url https://github.com/eigenteam/eigen-git-mirror.git
 RUN git submodule update --recursive
 
+# fix for CUDA10 and compute 75
+RUN sed -i -e "s,#if __CUDA_ARCH__ <= 700,#if __CUDA_ARCH__ <= 750,g" caffe2/utils/GpuDefs.cuh
+
+# fix for eigen with cuda 9.1 or higher
+RUN sed -i -e "s,math_functions.hpp,cuda_runtime.h,g" third_party/eigen/Eigen/Core
+
 # Copy custom caffe2-modules
 RUN cp $DETECTRON_PATH/caffe2-modules/* $CAFFE2_SRC_PATH/modules/detectron
 
-# Install Caffe2
+# CUDA binary and ptx compute version for caffe2
+ARG CUDA_ARCH_BIN="75"
+ARG CUDA_ARCH_PTX="61"
+
+# Build and install Caffe2
 RUN mkdir build && cd build \
     && cmake .. \
     -DCUDA_ARCH_NAME=Manual \
-    -DCUDA_ARCH_BIN="35 52 60 61" \
-    -DCUDA_ARCH_PTX="61" \
+    -DCUDA_ARCH_BIN=${CUDA_ARCH_BIN} \
+    -DCUDA_ARCH_PTX=${CUDA_ARCH_PTX} \
     -DUSE_NNPACK=OFF \
-    -DUSE_ROCKSDB=OFF
-RUN make -j"$(nproc)"
-RUN ldconfig && cp -r build /usr/local/caffe2
-ENV PYTHONPATH /usr/local/caffe2:${PYTHONPATH}
+    -DUSE_ROCKSDB=OFF \
+    -DUSE_OPENMP=ON \
+    -DUSE_NCCL=ON \
+    -DUSE_CUDA=ON \
+    -DCMAKE_DISABLE_FIND_PACKAGE_Eigen3=TRUE \
+    -DCMAKE_INSTALL_PREFIX=$CAFFE2_INSTALL_PATH && \
+    make -j"$(nproc)" install
 
-# Install the COCO API
-RUN git clone https://github.com/cocodataset/cocoapi.git $COCOAPI_PATH
-WORKDIR $COCOAPI_PATH/PythonAPI
-RUN make install
 
-# Set up Python modules
+FROM nvidia/cuda:${CUDA_VERSION}-runtime-${OS_VERSION}
+LABEL maintainer "domen.tabernik@fri.uni-lj.si"
+
+# Set environment variables
+ENV CAFFE2_SRC_PATH /opt/caffe2
+ENV CAFFE2_INSTALL_PATH /opt/caffe2-install
+ENV DETECTRON_PATH /opt/detectron
+ENV COCOAPI_PATH /opt/cocoapi
+
+# Install Basic dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends --allow-change-held-packages \
+    build-essential git \
+    libglib2.0-0 \
+    libsm6 libxext6 libxrender-dev \
+    libgoogle-glog0v5 libgflags2v5 liblmdb0 libleveldb1v5 libprotobuf9v5 \
+    libopencv-core2.4v5 libopencv-highgui2.4v5 \
+    python-pip \
+    python-dev \
+    python-setuptools \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir opencv-python \
+                cython \
+                matplotlib \
+                protobuf \
+                numpy \
+                future \
+                hypothesis \
+                requests \
+                scipy \
+                six \
+                setuptools==38.4.0 \
+                pyyaml==3.12
+
+# Install Caffe2
+COPY --from=detectron-build $CAFFE2_INSTALL_PATH $CAFFE2_INSTALL_PATH
+
+ENV PYTHONPATH $CAFFE2_INSTALL_PATH/lib/python2.7/dist-packages:${PYTHONPATH}
+ENV LD_LIBRARY_PATH $CAFFE2_INSTALL_PATH/lib:$LD_LIBRARY_PATH
+
+RUN ln -s $CAFFE2_INSTALL_PATH/lib/ $CAFFE2_INSTALL_PATH/lib/python2.7/dist-packages/lib && ldconfig
+
+# Build the COCO API
+RUN git clone --depth 1 https://github.com/cocodataset/cocoapi.git $COCOAPI_PATH && \
+    cd $COCOAPI_PATH/PythonAPI && \
+    make install
+
+# Clone Detectron repository
+RUN git clone --depth 1 https://github.com/skokec/detectron-traffic-signs.git $DETECTRON_PATH
+
+# Build Python modules for detectron
 WORKDIR $DETECTRON_PATH/lib
-RUN make
+RUN make -j && ldconfig
 
 # Go to Detectron root
 WORKDIR $DETECTRON_PATH
