@@ -71,15 +71,15 @@ def parse_args():
     parser.add_argument(
         '--output-dir',
         dest='output_dir',
-        help='directory for visualization pdfs (default: /tmp/infer_simple)',
-        default='/tmp/infer_simple',
+        help='directory for visualization pdfs (default: NONE - does not output images)',
+        default=None,
         type=str
     )
     parser.add_argument(
-        '--output-detection-dir',
-        dest='output_detection_dir',
-        help='directory for outputing detections (default: NONE - does not output detections)',
-        default='',
+        '--output-detection-file',
+        dest='output_detection_file',
+        help='file for outputing detections (default: NONE - does not output detections)',
+        default=None,
         type=str
     )
     parser.add_argument(
@@ -121,14 +121,11 @@ def main(args):
     im_list = sorted(im_list)
 
     fn = None
-    if len(args.output_detection_dir) > 0:
-        fn = open(os.path.join(args.output_detection_dir,'detections.txt'), 'w')
+    if args.output_detection_file is not None and len(args.output_detection_file) > 0:
+        fn = open(args.output_detection_file, 'w')
 
     for i, im_name in enumerate(im_list):
-        out_name = os.path.join(
-            args.output_dir, '{}'.format(os.path.basename(im_name) + '.png')
-        )
-        logger.info('Processing {} -> {}'.format(im_name, out_name))
+        logger.info('Processing {}'.format(im_name))
         im = cv2.imread(im_name)
         timers = defaultdict(Timer)
         t = time.time()
@@ -145,7 +142,7 @@ def main(args):
                 'rest (caches and auto-tuning need to warm up)'
             )
 
-        if len(args.output_detection_dir) > 0 :
+        if fn is not None :
             if isinstance(cls_boxes, list):
                 boxes, segms, keypoints, classes = vis_utils.convert_from_cls_format(
                     cls_boxes, cls_segms, cls_keyps)
@@ -163,20 +160,21 @@ def main(args):
                         fn.write('\n')
                 fn.flush()
 
-        vis_utils.vis_one_image(
-            im[:, :, ::-1],  # BGR -> RGB for visualization
-            os.path.basename(im_name),
-            args.output_dir,
-            cls_boxes,
-            cls_segms,
-            cls_keyps,
-            dataset=dummy_dfg200_dataset,
-            box_alpha=0.3,
-            show_class=True,
-            thresh=0.4,
-            kp_thresh=2,
-            ext='png'
-        )
+        if args.output_dir is not None and len(args.output_dir) > 0:
+            vis_utils.vis_one_image(
+                im[:, :, ::-1],  # BGR -> RGB for visualization
+                os.path.basename(im_name),
+                args.output_dir,
+                cls_boxes,
+                cls_segms,
+                cls_keyps,
+                dataset=dummy_dfg200_dataset,
+                box_alpha=0.3,
+                show_class=True,
+                thresh=0.4,
+                kp_thresh=2,
+                ext='png'
+            )
     if fn is not None:
         fn.close()
 
