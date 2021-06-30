@@ -18,19 +18,10 @@ FROM ${DETECTRON_IMAGE_RUNTIME}
 LABEL maintainer "domen.tabernik@fri.uni-lj.si"
 
 ######################################
-# install traffic sign model and scripts
-
-ENV MODEL_DIR /opt/tsr-detectron-model/
-ENV SCRIPT_DIR /opt/
-
-COPY --from=model-dl ${MODEL_DIR} ${MODEL_DIR}
-COPY scripts ${SCRIPT_DIR}
-
-RUN chmod +x ${SCRIPT_DIR}/run_main.py
-######################################
 # install dependencies for vicos-demo (echolib and echocv)
-
 RUN apt-get update && apt-get install -y build-essential cmake libopencv-dev python-numpy-dev
+
+ENV SCRIPT_DIR /opt/
 
 WORKDIR $SCRIPT_DIR
 
@@ -44,6 +35,16 @@ RUN cd ${SCRIPT_DIR}//echolib && mkdir build && cd build && cmake -DBUILD_DAEMON
 # install echocv (use version compatible with python2.7)
 RUN git clone https://github.com/vicoslab/echocv.git && cd ${SCRIPT_DIR}//echocv && git checkout 5a911db977676758f308193f7a13aa7875a7d114
 RUN cd ${SCRIPT_DIR}//echocv && mkdir build && cd build && cmake -DBUILD_APPS=OFF .. && make -j && make install && cd .. && rm -r build
+
+##################################
+# install traffic sign model and scripts
+
+ENV MODEL_DIR /opt/tsr-detectron-model/
+
+COPY --from=model-dl ${MODEL_DIR} ${MODEL_DIR}
+COPY scripts ${SCRIPT_DIR}
+
+RUN chmod +x ${SCRIPT_DIR}/run_main.py
 
 # define entry-point and default arguments
 ENTRYPOINT ["/opt/run_main.py", \
