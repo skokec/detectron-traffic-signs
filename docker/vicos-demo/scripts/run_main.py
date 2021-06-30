@@ -239,7 +239,7 @@ def main(args):
 
     if args.image_folder is None:
         from echolib_wrapper import EcholibWrapper
-        processer = EcholibWrapper
+        processer = lambda d: EcholibWrapper(d, args.image_folder, args.out_channel, args.in_channel)
     else:
         processer = lambda d: FolderProcessing(d, args.image_folder, args.image_ext, args.out_folder)
 
@@ -256,6 +256,7 @@ def main(args):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Traffic Sign Detection')
+
     parser.add_argument(
         '--cfg',
         dest='cfg',
@@ -297,6 +298,12 @@ def parse_args():
         help='folder to store output (default: None)',
         default=None,
         type=str
+    )
+    parser.add_argument(
+        'out_channel', help='out channel for echolib', default=None
+    )
+    parser.add_argument(
+        'in_channel', help='input channel for echolib', default=None
     )
     if len(sys.argv) == 1:
         parser.print_help()

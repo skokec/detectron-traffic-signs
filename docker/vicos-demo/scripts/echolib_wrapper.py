@@ -5,7 +5,7 @@ from echolib import pyecho
 import echocv
 
 class EcholibWrapper:
-    def __init__(self, detection_method):
+    def __init__(self, detection_method, out_channel, in_channel):
         self.camera = cv2.VideoCapture(0)
 
         self.loop = pyecho.IOLoop()
@@ -14,8 +14,8 @@ class EcholibWrapper:
 
         self.enabled = False
 
-        self.dockerCommandOut = pyecho.Publisher(self.client, sys.argv[1], "numpy.ndarray")
-        self.dockerCommandIn = pyecho.Subscriber(self.client, sys.argv[2], "int", self.callback)
+        self.dockerCommandOut = pyecho.Publisher(self.client, out_channel, "numpy.ndarray")
+        self.dockerCommandIn = pyecho.Subscriber(self.client, in_channel, "int", self.callback)
 
         self.detection_method = detection_method
 

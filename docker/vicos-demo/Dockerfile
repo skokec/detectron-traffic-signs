@@ -46,8 +46,7 @@ RUN git clone https://github.com/vicoslab/echocv.git && cd ${SCRIPT_DIR}//echocv
 RUN cd ${SCRIPT_DIR}//echocv && mkdir build && cd build && cmake -DBUILD_APPS=OFF .. && make -j && make install && cd .. && rm -r build
 
 # define entry-point and default arguments
-ENTRYPOINT ["/opt/run_main.py"]
-
-CMD ["--cfg=/opt/tsr-detectron-model/ResNet101_FPN_840px_ohem_weighted_cls_even_rois.yaml", \
-     "--wts=/opt/tsr-detectron-model/model_final.pkl", \
-     "--cat=/opt/dfg_catalog"]
+ENTRYPOINT ["/opt/run_main.py", \
+            "--cfg=/opt/tsr-detectron-model/ResNet101_FPN_840px_ohem_weighted_cls_even_rois.yaml", \
+            "--wts=/opt/tsr-detectron-model/model_final.pkl", \
+            "--cat=/opt/dfg_catalog"]
