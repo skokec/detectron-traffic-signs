@@ -25,11 +25,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends --allow-change-
     libsnappy-dev \
     protobuf-compiler \
     python-dev \
-    python-numpy \
     python-pip \
     python-pydot \
     python-setuptools \
-    python-scipy \
     libnccl2 \
     libnccl-dev \
     wget \
@@ -39,27 +37,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends --allow-change-
 RUN cd /tmp && wget https://github.com/Kitware/CMake/releases/download/v3.17.1/cmake-3.17.1-Linux-x86_64.sh && \
     sh cmake-3.17.1-Linux-x86_64.sh --prefix=/usr/local --exclude-subdir --skip-license && rm /tmp/cmake-*.sh
 
-
 # Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir \
-    Cython \
+RUN pip install --no-cache-dir pip==19.3.1  wheel==0.35.1
+RUN pip install --no-cache-dir \
+    Cython==0.29.21 \
     flask \
-    future \
-    hypothesis \
-    matplotlib \
-    mock \
-    numpy \
-    opencv-python \
-    protobuf \
-    pydot \
+    future==0.18.2 \
+    hypothesis==4.57.1 \
+    matplotlib==2.2.5 \
+    mock==3.0.5 \
+    numpy==1.16.6 \
+    opencv-python==4.1.0.25 \
+    protobuf==3.13.0 \
+    pydot==1.4.2 \
     python-nvd3 \
     pyyaml==3.12 \
-    requests \
-    scikit-image \
-    scipy \
-    setuptools==38.4.0 \
-    six
+    requests==2.25.1 \
+    scikit-image==0.14.5 \
+    scipy==1.2.3 \
+    setuptools==44.0.0 \
+    six==1.15.0
 
 # Clone Detectron repository
 RUN git clone --depth 1 https://github.com/skokec/detectron-traffic-signs.git $DETECTRON_PATH
@@ -123,19 +120,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends --allow-change-
     python-setuptools \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir opencv-python \
-                cython \
-                matplotlib \
-                protobuf \
-                numpy \
-                future \
-                hypothesis \
-                requests \
-                scipy \
-                six \
-                setuptools==38.4.0 \
-                pyyaml==3.12
+RUN pip install --no-cache-dir pip==19.3.1  wheel==0.35.1
+RUN pip install --no-cache-dir \
+    Cython==0.29.21 \
+    future==0.18.2 \
+    hypothesis==4.57.1 \
+    matplotlib==2.2.5 \
+    numpy==1.16.6 \
+    opencv-python==4.1.0.25 \
+    protobuf==3.13.0 \
+    pyyaml==3.12 \
+    requests==2.25.1 \
+    scipy==1.2.3 \
+    setuptools==44.0.0 \
+    six==1.15.0
+
 
 # Install Caffe2
 COPY --from=detectron-build $CAFFE2_INSTALL_PATH $CAFFE2_INSTALL_PATH
