@@ -239,7 +239,7 @@ def main(args):
 
     if args.image_folder is None:
         from echolib_wrapper import EcholibWrapper
-        processer = lambda d: EcholibWrapper(d, args.image_folder, args.out_channel, args.in_channel)
+        processer = lambda d: EcholibWrapper(d, args.out_channel, args.in_channel)
     else:
         processer = lambda d: FolderProcessing(d, args.image_folder, args.image_ext, args.out_folder)
 
