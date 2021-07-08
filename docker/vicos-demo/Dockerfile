@@ -5,16 +5,25 @@ FROM ${OS_VERSION} as model-dl
 
 RUN apt-get update && apt-get install -y unzip
 
-ENV MODEL_DIR /opt/tsr-detectron-model/
+ENV MODEL_DIR /opt/tsr-detectron-model
 
-WORKDIR $MODEL_DIR
+WORKDIR $MODEL_DIR/resnet101
 
-ADD http://box.vicos.si/skokec/villard/tsr-tracker/detectron-ResNet101.tar.gz $MODEL_DIR
+ADD http://box.vicos.si/skokec/villard/tsr-tracker/detectron-ResNet101.tar.gz $MODEL_DIR/resnet101
 
-RUN tar -zxvf detectron-ResNet101.tar.gz
-RUN rm -rf /opt/tsr-detectron-model/detectron-ResNet101.tar.gz
+RUN tar -zxvf detectron-ResNet101.tar.gz && ln -s ResNet101_FPN_840px_ohem_weighted_cls_even_rois.yaml config.yaml
+RUN rm -rf $MODEL_DIR/detectron-ResNet101.tar.gz
+
+WORKDIR $MODEL_DIR/resnet50
+
+ADD http://box.vicos.si/skokec/villard/tsr-tracker/detectron-ResNet50.tar.gz $MODEL_DIR/resnet50
+
+RUN tar -zxvf detectron-ResNet50.tar.gz && ln -s ResNet50_FPN_840px_ohem_weighted_cls_even_rois.yaml config.yaml
+RUN rm -rf $MODEL_DIR/detectron-ResNet50.tar.gz
+
 
 FROM ${DETECTRON_IMAGE_RUNTIME}
+
 LABEL maintainer "domen.tabernik@fri.uni-lj.si"
 
 ######################################
@@ -38,16 +47,17 @@ RUN cd ${SCRIPT_DIR}//echocv && mkdir build && cd build && cmake -DBUILD_APPS=OF
 
 ##################################
 # install traffic sign model and scripts
+ARG BACKBONE=resnet50
 
 ENV MODEL_DIR /opt/tsr-detectron-model/
 
-COPY --from=model-dl ${MODEL_DIR} ${MODEL_DIR}
+COPY --from=model-dl ${MODEL_DIR}/${BACKBONE} ${MODEL_DIR}
 COPY scripts ${SCRIPT_DIR}
 
 RUN chmod +x ${SCRIPT_DIR}/run_main.py
 
 # define entry-point and default arguments
 ENTRYPOINT ["/opt/run_main.py", \
-            "--cfg=/opt/tsr-detectron-model/ResNet101_FPN_840px_ohem_weighted_cls_even_rois.yaml", \
+            "--cfg=/opt/tsr-detectron-model/config.yaml", \
             "--wts=/opt/tsr-detectron-model/model_final.pkl", \
             "--cat=/opt/dfg_catalog"]
