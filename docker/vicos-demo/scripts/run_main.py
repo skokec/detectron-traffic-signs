@@ -139,12 +139,23 @@ class TSRDemo:
 
                 # resize catalog image to the same size as detection
                 resized_cat_img = cv2.resize(cat_img, dsize=(plot_region[2], plot_region[3]))
-                # ensure image does not fall out of bounds
 
-                cat_img_roi = [0,0,resized_cat_img.shape[1],resized_cat_img.shape[0]]
+                cat_img_roi = [0, 0, resized_cat_img.shape[1], resized_cat_img.shape[0]]
+
+                # clip = left (x), right (x), top (y), bottom (y)
+                clip = [max(0, 0 - plot_region[0]),
+                        max(0, (plot_region[0] + plot_region[2])  - im.shape[1]),
+                        max(0, 0 - plot_region[1]),
+                        max(0, (plot_region[1] + plot_region[3])  - im.shape[0])]
+
+                # ensure image does not fall out of bounds
+                if np.sum(clip) > 0:
+                    plot_region = [plot_region[0] + clip[0],  plot_region[1] + clip[2], plot_region[2] - (clip[0] + clip[1]), plot_region[3] - (clip[2] + clip[3])]
+                    cat_img_roi = [cat_img_roi[0] + clip[0],  cat_img_roi[1] + clip[2], cat_img_roi[2] - (clip[0] + clip[1]), cat_img_roi[3] - (clip[2] + clip[3])]
 
                 if cat_img_roi[2]*cat_img_roi[3] > 0:
 
+                    # append selected region to forbidden plots (before converting to x1,y1,x2,y2)
                     forbidden_plot_regions = np.concatenate((forbidden_plot_regions,np.array(plot_region).reshape((1,-1))),axis=0)
 
                     # convert to x1,y1,x2,y2
