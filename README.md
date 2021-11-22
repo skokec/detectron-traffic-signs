@@ -8,13 +8,13 @@ The following changes are included:
 - added weights to loss of background samples during training (weight of 0.01 for RPN and 0.1 for classification)
 
 YAML definition files of detectron models for the [DFG-dataset](https://www.vicos.si/Downloads/DFGTSD) are available below:
- - [detectron-model-yaml-DFG-dataset.zip](http://box.vicos.si/skokec/villard/detectron-model-yaml-DFG-dataset.zip)
- - [detectron-model-yaml-DFG-dataset-augmented.zip](http://box.vicos.si/skokec/villard/detectron-model-yaml-DFG-dataset-augmented.zip)
+ - [detectron-model-yaml-DFG-dataset.zip](https://box.vicos.si/skokec/villard/detectron-model-yaml-DFG-dataset.zip)
+ - [detectron-model-yaml-DFG-dataset-augmented.zip](https://box.vicos.si/skokec/villard/detectron-model-yaml-DFG-dataset-augmented.zip)
 
 Each zip contains models based on ResNet101_FPN and ResNet50_FPN that have enabled OHEM (`OHEM: True`), even selection of small and large ROIs (`RPN_EVENLY_SELECT_POS_ROIS: True`) and weighting of pos/neg classes (`RPN_SIZE_WEIGHTED_LOSS: True` and `CLS_SIZE_WEIGHTED_LOSS: True`).
 
 You can download weights trained on DFG-Dataset for the upper model in:
- - [dfg_mask_rcnn_weights.tar.gz](http://box.vicos.si/skokec/villard/dfg_mask_rcnn_weights.tar.gz)
+ - [dfg_mask_rcnn_weights.tar.gz](https://box.vicos.si/skokec/villard/dfg_mask_rcnn_weights.tar.gz)
 
 Note: Due to slight update of the DFG dataset the resulty may vary from the ITS 2019 paper
 
