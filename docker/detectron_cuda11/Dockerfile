@@ -1,7 +1,7 @@
 ARG CUDA_VERSION=11.1-cudnn8
-ARG OS_VERSION=ubuntu16.04
+ARG UBUNTU_VERSION=16.04
 
-FROM nvidia/cuda:${CUDA_VERSION}-devel-${OS_VERSION} as detectron-build
+FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} as detectron-build
 LABEL maintainer "domen.tabernik@fri.uni-lj.si"
 
 # Set environment variables
@@ -103,7 +103,7 @@ RUN mkdir build && cd build \
     make -j"$(nproc)" install
 
 
-FROM nvidia/cuda:${CUDA_VERSION}-runtime-${OS_VERSION}
+FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION}
 LABEL maintainer "domen.tabernik@fri.uni-lj.si"
 
 # Set environment variables

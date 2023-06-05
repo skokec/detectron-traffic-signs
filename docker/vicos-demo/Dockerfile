@@ -1,7 +1,8 @@
-ARG OS_VERSION=ubuntu:16.04
+ARG UBUNTU_VERSION=16.04
 ARG DETECTRON_IMAGE_RUNTIME
 
-FROM ${OS_VERSION} as model-dl
+FROM echolib:${UBUNTU_VERSION} AS echolib-base
+FROM ubuntu:${UBUNTU_VERSION} AS model-dl
 
 RUN apt-get update && apt-get install -y unzip
 
@@ -21,32 +22,45 @@ ADD http://box.vicos.si/skokec/villard/tsr-tracker/detectron-ResNet50.tar.gz $MO
 RUN tar -zxvf detectron-ResNet50.tar.gz && ln -s ResNet50_FPN_840px_ohem_weighted_cls_even_rois.yaml config.yaml
 RUN rm -rf $MODEL_DIR/detectron-ResNet50.tar.gz
 
-
 FROM ${DETECTRON_IMAGE_RUNTIME}
 
 LABEL maintainer "domen.tabernik@fri.uni-lj.si"
 
 ######################################
-# install dependencies for vicos-demo (echolib and echocv)
-RUN apt-get update && apt-get install -y build-essential cmake libopencv-dev python-numpy-dev
 
 ENV SCRIPT_DIR /opt/
 
 WORKDIR $SCRIPT_DIR
 
-# install dependency pybind11
-RUN git clone https://github.com/wjakob/pybind11.git && cd pybind11 && mkdir build && cd build && cmake -DPYBIND11_TEST=OFF -DPYBIND11_INSTALL=ON .. && make -j install
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python-dev python-pip python-numpy libopencv-dev python-numpy-dev libssl-dev wget && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* 
 
-# install echolib (use version compatible with python2.7)
-RUN git clone https://github.com/vicoslab/echolib.git && cd ${SCRIPT_DIR}/echolib && git checkout f80d4dd71f7def76880e8f3ea915978ce56efcfb
-RUN cd ${SCRIPT_DIR}//echolib && mkdir build && cd build && cmake -DBUILD_DAEMON=OFF .. && make -j && make install && cd .. && rm -r build
+# Upgrade cmake
 
-# install echocv (use version compatible with python2.7)
-RUN git clone https://github.com/vicoslab/echocv.git && cd ${SCRIPT_DIR}//echocv && git checkout 5a911db977676758f308193f7a13aa7875a7d114
-RUN cd ${SCRIPT_DIR}//echocv && mkdir build && cd build && cmake -DBUILD_APPS=OFF .. && make -j && make install && cd .. && rm -r build
+#RUN wget https://github.com/Kitware/CMake/releases/download/v3.23.0-rc5/cmake-3.23.0-rc5.tar.gz
+#RUN tar -xf cmake-3.23.0-rc5.tar.gz
+#WORKDIR $SCRIPT_DIR/cmake-3.23.0-rc5
+#RUN ./bootstrap && make -j5 && make install
+
+#WORKDIR $SCRIPT_DIR
+
+#RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 0
+
+##################################
+# Install gcc 8
+
+RUN apt-get update && apt-get install build-essential software-properties-common -y
+RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y
+RUN apt-get update -y && apt-get install gcc-8 g++-8 -y && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 60 --slave /usr/bin/g++ g++ /usr/bin/g++-8 && update-alternatives --config gcc
+
+RUN apt-get update && apt-get install -y build-essential cmake libopencv-dev python-numpy-dev
+
+COPY --from=echolib-base /usr/local/ /usr/local/
 
 ##################################
 # install traffic sign model and scripts
+
 ARG BACKBONE=resnet50
 
 ENV MODEL_DIR /opt/tsr-detectron-model/
@@ -56,8 +70,24 @@ COPY scripts ${SCRIPT_DIR}
 
 RUN chmod +x ${SCRIPT_DIR}/run_main.py
 
+##################################
+# Install opencv
+
+#RUN git clone https://github.com/opencv/opencv.git
+#RUN mkdir $SCRIPT_DIR/opencv/build
+#WORKDIR $SCRIPT_DIR/opencv/build
+
+#RUN cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=RELEASE -DINSTALL_PYTHON_EXAMPL=ON -DINSTALL_C_EXAMPLES=OFF -DPYTHON_EXECUTABLE=/usr/bin/python3.5 -D__INSTALL_PATH_PYTHON3=/usr/local/lib/python3.5/dist-packages ..
+#RUN make install -j5 .
+
+#RUN cp -R /usr/local/lib/python3.5/site-packages/cv2 /usr/local/lib/python3.5/dist-packages
+
+#WORKDIR $SCRIPT_DIR
+
 # define entry-point and default arguments
 ENTRYPOINT ["/opt/run_main.py", \
             "--cfg=/opt/tsr-detectron-model/config.yaml", \
             "--wts=/opt/tsr-detectron-model/model_final.pkl", \
             "--cat=/opt/dfg_catalog"]
+
+# /opt/run_main.py --cfg=/opt/tsr-detectron-model/config.yaml --wts=/opt/tsr-detectron-model/model_final.pkl --cat=/opt/dfg_catalog 

@@ -52,7 +52,7 @@ class TSRDemo:
         self.vis_cls_im_min = vis_cls_im_min
         self.vis_cls_im_max = vis_cls_im_max
 
-    def doDetection(self, im):
+    def predict(self, im):
 
         with c2_utils.NamedCudaScope(0):
             cls_boxes, cls_segms, cls_keyps = infer_engine.im_detect_all(self.model, im, None)
@@ -60,7 +60,7 @@ class TSRDemo:
         if cls_boxes is not None:
           im = self.visualizeResults(im, cls_boxes)
 
-        return im
+        return cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
 
     def visualizeResults(self, im, boxes):
         """Constructs a numpy array with the detections visualized."""
@@ -238,7 +238,7 @@ class FolderProcessing:
         for img_filename in self.img_list:
 
             frame = cv2.imread(img_filename)
-            frame = self.detection_method.doDetection(frame)
+            frame = self.detection_method.predict(frame)
 
             if self.out_folder != None:
                 cv2.imwrite(os.path.join(self.out_folder, os.path.basename(img_filename)),frame)
@@ -250,7 +250,7 @@ def main(args):
 
     if args.image_folder is None:
         from echolib_wrapper import EcholibWrapper
-        processer = lambda d: EcholibWrapper(d, args.out_channel, args.in_channel)
+        processer = lambda d: EcholibWrapper(d)
     else:
         processer = lambda d: FolderProcessing(d, args.image_folder, args.image_ext, args.out_folder)
 
@@ -310,15 +310,7 @@ def parse_args():
         default=None,
         type=str
     )
-    parser.add_argument(
-        'out_channel', help='out channel for echolib', default=None
-    )
-    parser.add_argument(
-        'in_channel', help='input channel for echolib', default=None
-    )
-    if len(sys.argv) == 1:
-        parser.print_help()
-        sys.exit(1)
+
     return parser.parse_args()
 
 if __name__=='__main__':
